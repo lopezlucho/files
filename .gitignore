@@ -4,6 +4,11 @@
 temp/
 tmp/
 
+# Storage contents (uploaded files)
+storage/*
+!storage/.htaccess
+!storage/.gitignore
+
 # OS files
 .DS_Store
 Thumbs.db

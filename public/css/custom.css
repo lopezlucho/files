@@ -1,0 +1,96 @@
+/**
+ * Custom styling for Cloud Files Manager
+ */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.table td, .table th {
+    vertical-align: middle !important;
+}
+
+.file-icon {
+    font-size: 1.25rem;
+    width: 28px;
+    display: inline-block;
+    text-align: center;
+}
+
+.dropzone {
+    border: 2px dashed #007bff !important;
+    border-radius: 8px;
+    background: #f8f9fa;
+    min-height: 180px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.dropzone .dz-message {
+    font-weight: 500;
+    color: #495057;
+    margin: 1em 0;
+}
+
+.breadcrumb {
+    background-color: transparent;
+    padding: 0;
+    margin-bottom: 0;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    font-size: 1.2rem;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.storage-meter {
+    height: 8px;
+    border-radius: 4px;
+}
+
+.badge-usb-mounted {
+    background-color: #28a745;
+    color: #fff;
+    animation: pulse 2s infinite;
+}
+
+.badge-usb-unmounted {
+    background-color: #6c757d;
+    color: #fff;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.75; }
+    100% { opacity: 1; }
+}
+
+.preview-container {
+    max-height: 70vh;
+    overflow-y: auto;
+    text-align: center;
+}
+
+.preview-text {
+    text-align: left;
+    white-space: pre-wrap;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88rem;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    border-radius: 6px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.btn-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}

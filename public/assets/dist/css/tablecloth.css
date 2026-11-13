@@ -1,0 +1,33 @@
+/* 
+
+	TableCloth	
+	by Alen Grakalic, brought to you by cssglobe.com
+	
+*/
+
+/* general styles */
+
+.tablecloth table, .tablecloth td{
+
+}
+.tablecloth table{width:100%;border-collapse:collapse;margin:1em 0;}
+.tablecloth th, .tablecloth td{text-align:left;padding:0em;border:0px solid #fff;}
+.tablecloth th{background:#328aa4 url(tr_back.gif) repeat-x;color:#fff;}
+.tablecloth td{background:#e5f1f4;}
+
+/* tablecloth styles */
+
+.tablecloth tr.even .tablecloth td{background:#e5f1f4;}
+.tablecloth tr.odd .tablecloth td{background:#f8fbfc;}
+
+.tablecloth th.over, .tablecloth tr.even .tablecloth th.over, .tablecloth tr.odd .tablecloth th.over{background:#4a98af;}
+.tablecloth th.down, .tablecloth tr.even .tablecloth th.down, tr.tablecloth.odd .tablecloth th.down{background:#bce774;}
+.tablecloth th.selected, .tablecloth tr.even .tablecloth th.selected, .tablecloth tr.odd .tablecloth th.selected{}
+
+.tablecloth td.over, .tablecloth tr.even .tablecloth td.over, .tablecloth tr.odd .tablecloth td.over{background:#ecfbd4;}
+.tablecloth td.down, .tablecloth tr.even .tablecloth td.down,.tablecloth  th.odd .tablecloth td.down{background:#bce774;color:#fff;}
+.tablecloth td.selected, .tablecloth tr.even .tablecloth td.selected, .tablecloth tr.odd .tablecloth td.selected{background:#bce774;color:#555;}
+
+/* use this if you want to apply different styling to empty table cells*/
+/*.tablecloth td.empty, .tablecloth tr.odd .tablecloth td.empty, .tablecloth tr.even .tablecloth td.empty{background:#fff;}*/
+/*.tablecloth td.empty, .tablecloth tr.odd .tablecloth td.empty, .tablecloth tr.even .tablecloth td.empty{background:#e5f1f4;}*/

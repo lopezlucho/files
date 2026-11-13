@@ -1,0 +1,145 @@
+<?php
+/**
+ * Files Management API Endpoint
+ * Compatible with PHP 7.4+
+ */
+
+require_once dirname(__DIR__) . '/config/config.php';
+require_once dirname(__DIR__) . '/src/Auth.php';
+require_once dirname(__DIR__) . '/src/FileManager.php';
+
+Auth::requireLogin();
+
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$source = $_GET['source'] ?? $_POST['source'] ?? 'local';
+if ($source !== 'usb') {
+    $source = 'local';
+}
+
+$path = $_GET['path'] ?? $_POST['path'] ?? '';
+
+try {
+    switch ($action) {
+        case 'list':
+            header('Content-Type: application/json');
+            $data = FileManager::listDirectory($source, $path);
+            $stats = null;
+            try {
+                $stats = FileManager::getDiskStats($source);
+            } catch (Exception $e) {
+                // Ignore stats error if unmounted
+            }
+            $data['success'] = true;
+            $data['stats']   = $stats;
+            echo json_encode($data);
+            break;
+
+        case 'mkdir':
+            header('Content-Type: application/json');
+            $name = $_POST['name'] ?? '';
+            $result = FileManager::createFolder($source, $path, $name);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'CREATE_FOLDER', "Carpeta '{$name}' en {$source}:/{$path}");
+            echo json_encode($result);
+            break;
+
+        case 'upload':
+            header('Content-Type: application/json');
+            if (empty($_FILES['file'])) {
+                echo json_encode(['success' => false, 'error' => 'No se recibió ningún archivo']);
+                exit;
+            }
+            $result = FileManager::uploadFile($source, $path, $_FILES['file']);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'UPLOAD_FILE', "Archivo '{$result['filename']}' en {$source}:/{$path}");
+            echo json_encode($result);
+            break;
+
+        case 'rename':
+            header('Content-Type: application/json');
+            $newName = $_POST['new_name'] ?? '';
+            $result = FileManager::renameItem($source, $path, $newName);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'RENAME_ITEM', "Renombrado '{$path}' a '{$newName}' en {$source}");
+            echo json_encode($result);
+            break;
+
+        case 'delete':
+            header('Content-Type: application/json');
+            $result = FileManager::deleteItem($source, $path);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'DELETE_ITEM', "Eliminado '{$path}' en {$source}");
+            echo json_encode($result);
+            break;
+
+        case 'download':
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'DOWNLOAD_FILE', "Descargado '{$path}' de {$source}");
+            FileManager::downloadFile($source, $path);
+            break;
+
+        case 'zip':
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'DOWNLOAD_ZIP', "Descarga comprimida de '{$path}' de {$source}");
+            FileManager::zipAndDownloadFolder($source, $path);
+            break;
+
+        case 'preview':
+            $fullPath = FileManager::resolvePath($source, $path);
+            if (!is_file($fullPath)) {
+                http_response_code(404);
+                die('Archivo no encontrado');
+            }
+
+            $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+            $previewType = FileManager::getPreviewType($ext);
+
+            if ($previewType === 'text') {
+                header('Content-Type: application/json');
+                $previewData = FileManager::readFilePreview($source, $path);
+                $previewData['success'] = true;
+                $previewData['type']    = 'text';
+                echo json_encode($previewData);
+                exit;
+            }
+
+            // Binary inline preview (images, PDF, audio, video)
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+
+            $mime = FileManager::getMimeType($fullPath);
+            $size = filesize($fullPath);
+            $filename = basename($fullPath);
+
+            header('Content-Type: ' . $mime);
+            header('Content-Disposition: inline; filename="' . rawurlencode($filename) . '"');
+            header('Content-Length: ' . $size);
+            header('Cache-Control: private, max-age=3600');
+
+            $fp = fopen($fullPath, 'rb');
+            if ($fp !== false) {
+                fpassthru($fp);
+                fclose($fp);
+            }
+            exit;
+
+        case 'stats':
+            header('Content-Type: application/json');
+            $stats = FileManager::getDiskStats($source);
+            echo json_encode(['success' => true, 'stats' => $stats]);
+            break;
+
+        default:
+            header('Content-Type: application/json');
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Acción no válida']);
+            break;
+    }
+} catch (Exception $e) {
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code(400);
+    }
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+}

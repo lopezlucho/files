@@ -1,0 +1,36 @@
+
+
+function reloj() {
+	time = new Date();
+	horas = time.getHours();
+	minutos = time.getMinutes();
+	segundos = time.getSeconds();
+
+    if (horas >= 12) {
+     	horas = horas - 12;
+     	porcentajeHoras = horas / 12 * 360;
+    }  else {
+    	porcentajeHoras = horas / 12 * 360;
+    }
+
+    porcentajeHoras += minutos / 60 * 30;
+    porcentajeMinutos = minutos / 60 * 360;
+    porcentajeSegundos = segundos / 60 * 360;
+
+    document.getElementById("horas").style.transform = "rotate("+ porcentajeHoras +"deg)";
+    document.getElementById("minutos").style.transform = "rotate("+ porcentajeMinutos +"deg)";
+    document.getElementById("segundos").style.transform = "rotate("+ porcentajeSegundos +"deg)";
+    if (horas<10) {
+        horas = "0" + horas;
+    }
+    if (minutos<10) {
+        minutos = "0" + minutos;
+    }
+    if (segundos<10) {
+        segundos = "0" + segundos;
+    }
+    document.getElementById("p-content").innerHTML = horas + ":" + minutos + ":" + segundos; 
+}
+
+
+setInterval(reloj, 1000);
