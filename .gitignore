@@ -1,0 +1,9 @@
+# Logs and cache
+*.log
+.cache/
+temp/
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
