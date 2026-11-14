@@ -1,10 +1,6 @@
 <?php
 $currentUser = Auth::user();
 $isUsbMounted = UsbManager::isMounted();
-$currentSource = $_GET['source'] ?? 'local';
-if ($currentSource !== 'usb') {
-    $currentSource = 'local';
-}
 ?>
 <!-- Navbar -->
 <nav class="main-header navbar navbar-expand navbar-white navbar-light border-bottom">
@@ -13,16 +9,15 @@ if ($currentSource !== 'usb') {
         <li class="nav-item">
             <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
         </li>
-        <!-- Storage Source Selector -->
         <li class="nav-item d-none d-sm-inline-block">
-            <div class="btn-group btn-group-sm ml-2">
-                <a href="<?= BASE_URL ?>/?source=local" class="btn <?= $currentSource === 'local' ? 'btn-primary font-weight-bold' : 'btn-outline-secondary' ?>">
-                    <i class="fas fa-hdd mr-1"></i> Almacenamiento Local
-                </a>
-                <a href="<?= BASE_URL ?>/?source=usb" class="btn <?= $currentSource === 'usb' ? 'btn-primary font-weight-bold' : 'btn-outline-secondary' ?>">
-                    <i class="fab fa-usb mr-1"></i> Unidad USB
-                </a>
-            </div>
+            <a href="<?= BASE_URL ?>/" class="nav-link font-weight-bold text-dark">
+                <i class="fas fa-columns text-primary mr-1"></i> Modo Commander
+            </a>
+        </li>
+        <li class="nav-item d-none d-md-inline-block">
+            <button type="button" class="btn btn-outline-info btn-xs mt-1 ml-2" onclick="app.showHelp()">
+                <i class="fas fa-keyboard mr-1"></i> Atajos [F1]
+            </button>
         </li>
     </ul>
 

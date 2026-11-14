@@ -1,9 +1,5 @@
 <?php
 $currentView = $_GET['view'] ?? 'files';
-$currentSource = $_GET['source'] ?? 'local';
-if ($currentSource !== 'usb') {
-    $currentSource = 'local';
-}
 $isUsbMounted = UsbManager::isMounted();
 ?>
 <!-- Main Sidebar Container -->
@@ -19,44 +15,31 @@ $isUsbMounted = UsbManager::isMounted();
         <!-- Sidebar Menu -->
         <nav class="mt-3">
             <ul class="nav nav-pills nav-sidebar flex-column nav-child-indent" data-widget="treeview" role="menu" data-accordion="false">
-                <li class="nav-header text-uppercase font-weight-bold text-muted small">Almacenamiento</li>
+                <li class="nav-header text-uppercase font-weight-bold text-muted small">Explorador</li>
 
-                <!-- Local Storage -->
+                <!-- Dual Commander Files -->
                 <li class="nav-item">
-                    <a href="<?= BASE_URL ?>/?source=local" class="nav-link <?= ($currentView === 'files' && $currentSource === 'local') ? 'active' : '' ?>">
-                        <i class="nav-icon fas fa-hdd text-info"></i>
+                    <a href="<?= BASE_URL ?>/" class="nav-link <?= ($currentView === 'files') ? 'active' : '' ?>">
+                        <i class="nav-icon fas fa-columns text-primary"></i>
                         <p>
-                            Archivos Locales
-                            <span class="badge badge-info right">Local</span>
+                            Modo Commander
+                            <span class="badge badge-primary right">Dual</span>
                         </p>
                     </a>
                 </li>
 
-                <!-- USB Storage -->
-                <li class="nav-item">
-                    <a href="<?= BASE_URL ?>/?source=usb" class="nav-link <?= ($currentView === 'files' && $currentSource === 'usb') ? 'active' : '' ?>">
-                        <i class="nav-icon fab fa-usb <?= $isUsbMounted ? 'text-success' : 'text-muted' ?>"></i>
-                        <p>
-                            Unidad USB
-                            <?php if ($isUsbMounted): ?>
-                                <span class="badge badge-success right">Online</span>
-                            <?php else: ?>
-                                <span class="badge badge-secondary right">Offline</span>
-                            <?php endif; ?>
-                        </p>
-                    </a>
-                </li>
-
-                <li class="nav-header text-uppercase font-weight-bold text-muted small mt-2">Administración</li>
+                <li class="nav-header text-uppercase font-weight-bold text-muted small mt-2">Dispositivos y Red</li>
 
                 <!-- USB Management -->
                 <li class="nav-item">
                     <a href="<?= BASE_URL ?>/?view=usb" class="nav-link <?= ($currentView === 'usb') ? 'active' : '' ?>">
                         <i class="nav-icon fas fa-microchip text-warning"></i>
                         <p>
-                            Gestión de Dispositivos
+                            Unidades USB
                             <?php if ($isUsbMounted): ?>
-                                <span class="badge badge-pill badge-success right">1</span>
+                                <span class="badge badge-pill badge-success right">Online</span>
+                            <?php else: ?>
+                                <span class="badge badge-pill badge-secondary right">Offline</span>
                             <?php endif; ?>
                         </p>
                     </a>
@@ -65,7 +48,7 @@ $isUsbMounted = UsbManager::isMounted();
                 <!-- Shared Links -->
                 <li class="nav-item">
                     <a href="<?= BASE_URL ?>/?view=shares" class="nav-link <?= ($currentView === 'shares') ? 'active' : '' ?>">
-                        <i class="nav-icon fas fa-share-alt text-primary"></i>
+                        <i class="nav-icon fas fa-share-alt text-info"></i>
                         <p>Enlaces Compartidos</p>
                     </a>
                 </li>

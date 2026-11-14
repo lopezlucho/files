@@ -1,23 +1,45 @@
 /**
- * Cloud Files Manager - Frontend Application Script
+ * Cloud Files Manager - Dual Panel Commander Mode
+ * Compatible with Midnight Commander / Norton Commander UX
  */
 
-// Disable Dropzone autodiscover globally
+// Disable Dropzone autodiscover
 if (typeof Dropzone !== 'undefined') {
     Dropzone.autoDiscover = false;
 }
 
 const app = {
-    source: (window.APP_CONFIG && window.APP_CONFIG.source) || 'local',
-    currentPath: (window.APP_CONFIG && window.APP_CONFIG.currentPath) || '',
-    filesTable: null,
+    activePanel: 'left', // 'left' or 'right'
+    panels: {
+        left: {
+            key: 'left',
+            source: 'local',
+            path: '',
+            items: [],
+            filteredIndices: [],
+            selectedIndices: new Set(),
+            focusedIndex: 0,
+            stats: null
+        },
+        right: {
+            key: 'right',
+            source: 'local',
+            path: '',
+            items: [],
+            filteredIndices: [],
+            selectedIndices: new Set(),
+            focusedIndex: 0,
+            stats: null
+        }
+    },
     dropzoneInstance: null,
+    uploadTargetPanel: 'left',
 
     init: function () {
         this.bindGlobalEvents();
 
-        if ($('#tblFiles').length) {
-            this.initFilesView();
+        if ($('#panel-left').length && $('#panel-right').length) {
+            this.initCommanderView();
         } else if ($('#tblUsbDevices').length) {
             this.initUsbView();
         } else if ($('#tblShares').length) {
@@ -71,17 +93,9 @@ const app = {
                     if (res.success) {
                         $('#modalChangePassword').modal('hide');
                         $('#formChangePassword')[0].reset();
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Éxito',
-                            text: res.message || 'Contraseña actualizada'
-                        });
+                        Swal.fire({ icon: 'success', title: 'Éxito', text: res.message || 'Contraseña actualizada' });
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error',
-                            text: res.error || 'No se pudo cambiar la contraseña'
-                        });
+                        Swal.fire({ icon: 'error', title: 'Error', text: res.error || 'No se pudo cambiar la contraseña' });
                     }
                 },
                 error: function () {
@@ -90,431 +104,643 @@ const app = {
                 }
             });
         });
+
+        // Save Editor via Button
+        $('#btnSaveEditor, #btnSaveEditorBottom').on('click', function () {
+            self.saveEditorContent();
+        });
+
+        // Editor Cursor tracking
+        $('#txtEditorContent').on('keyup click input', function () {
+            self.updateEditorStats();
+        });
+
+        // Global Keydown Handler (Keyboard Shortcuts & Commander Mode)
+        $(document).on('keydown', function (e) {
+            // When editor modal is open, intercept Ctrl+S and F2
+            if ($('#modalEditor').is(':visible')) {
+                if ((e.ctrlKey && e.key.toLowerCase() === 's') || e.key === 'F2') {
+                    e.preventDefault();
+                    self.saveEditorContent();
+                    return;
+                }
+                return;
+            }
+
+            // If user is currently typing in an input or modal, do not capture commander keys
+            if ($(e.target).is('input, textarea, select')) {
+                if (e.key === 'Escape') {
+                    $(e.target).blur();
+                }
+                return;
+            }
+
+            // If any modal is visible, let modal handle keys
+            if ($('.modal.show').length > 0) {
+                return;
+            }
+
+            // Handle Commander Keys
+            self.handleCommanderKey(e);
+        });
     },
 
     /* =========================================================================
-     * FILES EXPLORER VIEW
+     * COMMANDER DUAL PANEL VIEW
      * ========================================================================= */
-    initFilesView: function () {
+    initCommanderView: function () {
         const self = this;
 
-        // Initialize DataTable
-        self.filesTable = $('#tblFiles').DataTable({
-            responsive: true,
-            autoWidth: false,
-            paging: true,
-            pageLength: 25,
-            lengthChange: true,
-            searching: true,
-            ordering: true,
-            order: [[0, 'asc'], [1, 'asc']], // Folders first, then alphabetically
-            language: {
-                url: '/files/public/assets/plugins/Spanish.json'
-            },
-            columnDefs: [
-                { orderable: false, targets: [0, 4] } // Icon and Actions not sortable
-            ]
+        // Click to focus panel
+        $('.commander-panel').on('click', function () {
+            const panelKey = $(this).data('panel');
+            self.setActivePanel(panelKey);
         });
 
-        // Dropzone initialization
+        // Quick filter input handlers
+        $('#filter-left').on('input', function () {
+            self.filterPanel('left', $(this).val());
+        });
+        $('#filter-right').on('input', function () {
+            self.filterPanel('right', $(this).val());
+        });
+
+        // Checkbox "Select All"
+        $('.chk-select-all').on('change', function () {
+            const panelKey = $(this).data('panel');
+            const checked = $(this).is(':checked');
+            self.selectAll(panelKey, checked);
+        });
+
+        // Initialize Dropzone
         const dropzoneElem = document.getElementById('filesDropzone');
         if (dropzoneElem) {
             self.dropzoneInstance = new Dropzone(dropzoneElem, {
                 url: '/files/api/files.php?action=upload',
                 paramName: 'file',
-                maxFilesize: 2048, // 2GB
+                maxFilesize: 4096, // 4GB
                 parallelUploads: 2,
                 timeout: 3600000,
                 dictDefaultMessage: 'Arrastra tus archivos aquí para subirlos',
-                dictFallbackMessage: 'Tu navegador no soporta subida de archivos mediante arrastrar y soltar.',
-                dictFileTooBig: 'El archivo es demasiado grande ({{filesize}}MB). Tamaño máximo: {{maxFilesize}}MB.',
                 sending: function (file, xhr, formData) {
-                    formData.append('source', self.source);
-                    formData.append('path', self.currentPath);
+                    const panel = self.panels[self.uploadTargetPanel];
+                    formData.append('source', panel.source);
+                    formData.append('path', panel.path);
                 },
                 queuecomplete: function () {
                     Swal.fire({
                         icon: 'success',
                         title: 'Subida finalizada',
-                        text: 'Los archivos han sido procesados correctamente.',
-                        timer: 1500,
+                        timer: 1200,
                         showConfirmButton: false
                     });
-                    self.loadPath(self.currentPath);
+                    self.loadPanelPath(self.uploadTargetPanel, self.panels[self.uploadTargetPanel].path);
                 }
             });
         }
 
-        // Open Upload Modal
-        $('#btnOpenUpload').on('click', function () {
-            if (self.dropzoneInstance) {
-                self.dropzoneInstance.removeAllFiles();
-            }
-            $('#modalUpload').modal('show');
-        });
-
         // Close upload modal button
         $('#btnCloseUpload').on('click', function () {
-            self.loadPath(self.currentPath);
+            self.loadPanelPath(self.uploadTargetPanel, self.panels[self.uploadTargetPanel].path);
         });
 
-        // Refresh Files
-        $('#btnRefreshFiles').on('click', function () {
-            self.loadPath(self.currentPath);
-        });
-
-        // New Folder Modal trigger
-        $('#btnNewFolder').on('click', function () {
-            $('#txtNewFolderName').val('');
-            $('#modalNewFolder').modal('show');
-            setTimeout(function () { $('#txtNewFolderName').focus(); }, 400);
-        });
-
-        // Submit New Folder Form
-        $('#formNewFolder').on('submit', function (e) {
-            e.preventDefault();
-            const name = $('#txtNewFolderName').val().trim();
-            if (!name) return;
-
-            $.ajax({
-                url: '/files/api/files.php?action=mkdir',
-                type: 'POST',
-                data: {
-                    source: self.source,
-                    path: self.currentPath,
-                    name: name
-                },
-                dataType: 'json',
-                success: function (res) {
-                    if (res.success) {
-                        $('#modalNewFolder').modal('hide');
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Carpeta creada',
-                            text: res.message,
-                            timer: 1200,
-                            showConfirmButton: false
-                        });
-                        self.loadPath(self.currentPath);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: res.error });
-                    }
-                },
-                error: function () {
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error al comunicarse con el servidor' });
-                }
-            });
-        });
-
-        // Download Folder as Zip
-        $('#btnDownloadZip').on('click', function () {
-            const url = '/files/api/files.php?action=zip&source=' + encodeURIComponent(self.source) + '&path=' + encodeURIComponent(self.currentPath);
-            window.location.href = url;
-        });
-
-        // Submit Rename Form
-        $('#formRename').on('submit', function (e) {
-            e.preventDefault();
-            const path = $('#txtRenamePath').val();
-            const newName = $('#txtRenameNewName').val().trim();
-            if (!newName) return;
-
-            $.ajax({
-                url: '/files/api/files.php?action=rename',
-                type: 'POST',
-                data: {
-                    source: self.source,
-                    path: path,
-                    new_name: newName
-                },
-                dataType: 'json',
-                success: function (res) {
-                    if (res.success) {
-                        $('#modalRename').modal('hide');
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Renombrado',
-                            text: res.message,
-                            timer: 1200,
-                            showConfirmButton: false
-                        });
-                        self.loadPath(self.currentPath);
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: res.error });
-                    }
-                },
-                error: function () {
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor' });
-                }
-            });
-        });
-
-        // Submit Share Form
-        $('#formShare').on('submit', function (e) {
-            e.preventDefault();
-            const path = $('#txtSharePath').val();
-            const password = $('#txtSharePassword').val();
-            const expires = $('#selShareExpires').val();
-            const $btn = $('#btnSubmitShare');
-
-            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Generando...');
-
-            $.ajax({
-                url: '/files/api/share.php?action=create',
-                type: 'POST',
-                data: {
-                    source: self.source,
-                    path: path,
-                    password: password,
-                    expires_hours: expires
-                },
-                dataType: 'json',
-                success: function (res) {
-                    $btn.prop('disabled', false).html('<i class="fas fa-link mr-1"></i> Generar Enlace');
-                    if (res.success) {
-                        const fullUrl = window.location.origin + res.share_url;
-                        $('#txtGeneratedShareUrl').val(fullUrl);
-                        $('#shareResultArea').slideDown();
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: res.error });
-                    }
-                },
-                error: function () {
-                    $btn.prop('disabled', false).html('<i class="fas fa-link mr-1"></i> Generar Enlace');
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error al comunicarse con el servidor' });
-                }
-            });
-        });
-
-        // Copy Share URL
-        $('#btnCopyGeneratedUrl').on('click', function () {
-            const input = document.getElementById('txtGeneratedShareUrl');
-            input.select();
-            input.setSelectionRange(0, 99999);
-            navigator.clipboard.writeText(input.value).then(function () {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Copiado',
-                    text: 'Enlace copiado al portapapeles',
-                    timer: 1200,
-                    showConfirmButton: false
-                });
-            });
-        });
-
-        // Load initial path
-        self.loadPath(self.currentPath);
+        // Load both panels initially
+        self.loadPanelPath('left', '');
+        self.loadPanelPath('right', '');
     },
 
-    loadPath: function (path) {
+    setActivePanel: function (panelKey) {
+        if (panelKey !== 'left' && panelKey !== 'right') return;
+        this.activePanel = panelKey;
+
+        // Visual highlight on active panel
+        $('.commander-panel').removeClass('panel-active');
+        $('#panel-' + panelKey).addClass('panel-active');
+
+        // Update badge text
+        $('#panel-left .panel-badge-indicator').html(panelKey === 'left' ? '<i class="fas fa-arrow-right mr-1"></i> PANEL IZQUIERDO [ACTIVO]' : 'PANEL IZQUIERDO');
+        $('#panel-right .panel-badge-indicator').html(panelKey === 'right' ? '<i class="fas fa-arrow-right mr-1"></i> PANEL DERECHO [ACTIVO]' : 'PANEL DERECHO');
+
+        if (panelKey === 'left') {
+            $('#panel-left .panel-badge-indicator').removeClass('badge-secondary').addClass('badge-primary');
+            $('#panel-right .panel-badge-indicator').removeClass('badge-primary').addClass('badge-secondary');
+        } else {
+            $('#panel-right .panel-badge-indicator').removeClass('badge-secondary').addClass('badge-primary');
+            $('#panel-left .panel-badge-indicator').removeClass('badge-primary').addClass('badge-secondary');
+        }
+
+        this.highlightFocusedRow(panelKey);
+    },
+
+    switchActivePanel: function () {
+        const nextPanel = (this.activePanel === 'left') ? 'right' : 'left';
+        this.setActivePanel(nextPanel);
+    },
+
+    setPanelSource: function (panelKey, source) {
+        const p = this.panels[panelKey];
+        if (p.source === source) return;
+
+        if (source === 'usb' && !window.APP_CONFIG.isUsbMounted) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'USB no montada',
+                text: 'Debes montar una unidad USB en /media/usb para poder explorarla.',
+                confirmButtonText: 'Ir a Montar USB',
+                showCancelButton: true
+            }).then(function (res) {
+                if (res.isConfirmed) {
+                    window.location.href = '/files/?view=usb';
+                }
+            });
+            return;
+        }
+
+        p.source = source;
+        $('#panel-' + panelKey + ' .btn-src-local').toggleClass('active', source === 'local');
+        $('#panel-' + panelKey + ' .btn-src-usb').toggleClass('active', source === 'usb');
+
+        this.setActivePanel(panelKey);
+        this.loadPanelPath(panelKey, '');
+    },
+
+    loadPanelPath: function (panelKey, path) {
         const self = this;
-        self.currentPath = path;
+        const p = self.panels[panelKey];
+        p.path = path;
+        p.selectedIndices.clear();
+        p.focusedIndex = 0;
+
+        const $tbody = $('#tbody-' + panelKey);
+        $tbody.html('<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin mr-2"></i> Cargando...</td></tr>');
 
         $.ajax({
             url: '/files/api/files.php?action=list',
             type: 'GET',
-            data: {
-                source: self.source,
-                path: path
-            },
+            data: { source: p.source, path: path },
             dataType: 'json',
             success: function (res) {
                 if (!res.success) {
-                    Swal.fire({ icon: 'error', title: 'Error', text: res.error });
+                    $tbody.html('<tr><td colspan="5" class="text-center py-3 text-danger"><i class="fas fa-exclamation-circle mr-1"></i> ' + escapeHtml(res.error) + '</td></tr>');
                     return;
                 }
 
-                // Render Breadcrumbs
-                self.renderBreadcrumbs(res.breadcrumbs);
+                p.stats = res.stats;
+                self.renderBreadcrumbs(panelKey, res.breadcrumbs);
 
-                // Render Storage Stats
+                // Render disk stats
                 if (res.stats) {
-                    $('#lblUsedSpace').text(res.stats.used_h);
-                    $('#lblTotalSpace').text(res.stats.total_h);
-                    $('#lblUsedPct').text(res.stats.used_percent + '%');
-                    $('#barStorageUsage').css('width', res.stats.used_percent + '%');
-
-                    // Color code storage bar
-                    const bar = $('#barStorageUsage');
-                    bar.removeClass('bg-primary bg-warning bg-danger');
-                    if (res.stats.used_percent > 90) {
-                        bar.addClass('bg-danger');
-                    } else if (res.stats.used_percent > 75) {
-                        bar.addClass('bg-warning');
-                    } else {
-                        bar.addClass('bg-primary');
-                    }
+                    $('#stats-' + panelKey).html('<i class="fas fa-database mr-1"></i> Libre: <b>' + res.stats.free_h + '</b> (' + (100 - res.stats.used_percent).toFixed(1) + '%)');
                 }
 
-                // Populate DataTable
-                self.filesTable.clear();
-
-                // If in a subfolder, add '..' up-directory row
+                // Build Items with '..' if subfolder
+                const items = [];
                 if (path !== '') {
-                    const parentParts = path.split('/');
-                    parentParts.pop();
-                    const parentPath = parentParts.join('/');
-
-                    self.filesTable.row.add([
-                        '<i class="fas fa-level-up-alt text-primary file-icon"></i>',
-                        '<a href="javascript:void(0)" onclick="app.loadPath(\'' + escapeHtml(parentPath) + '\')" class="font-weight-bold text-primary">.. [Subir un nivel]</a>',
-                        '-',
-                        '-',
-                        ''
-                    ]);
+                    const parts = path.split('/');
+                    parts.pop();
+                    const parentPath = parts.join('/');
+                    items.push({
+                        is_up: true,
+                        name: '.. [Subir un nivel]',
+                        path: parentPath,
+                        is_dir: true,
+                        size_h: '<DIR>',
+                        modified_h: '',
+                        icon: 'fas fa-level-up-alt text-primary'
+                    });
                 }
 
-                res.items.forEach(function (item) {
-                    const iconCol = '<i class="' + item.icon + ' file-icon"></i>';
-
-                    let nameCol = '';
-                    if (item.is_dir) {
-                        nameCol = '<a href="javascript:void(0)" onclick="app.loadPath(\'' + escapeHtml(item.path) + '\')" class="font-weight-bold text-dark"><i class="fas fa-folder mr-1 text-warning"></i> ' + escapeHtml(item.name) + '</a>';
-                    } else {
-                        if (item.is_previewable) {
-                            nameCol = '<a href="javascript:void(0)" onclick="app.openPreview(\'' + escapeHtml(item.path) + '\', \'' + escapeHtml(item.name) + '\', \'' + item.preview_type + '\', \'' + item.size_h + '\')" class="text-dark">' + escapeHtml(item.name) + '</a>';
-                        } else {
-                            nameCol = '<span class="text-dark">' + escapeHtml(item.name) + '</span>';
-                        }
-                    }
-
-                    // Actions Column
-                    let actionsCol = '<div class="btn-group btn-group-sm float-right">';
-
-                    if (!item.is_dir && item.is_previewable) {
-                        actionsCol += '<button type="button" class="btn btn-outline-info btn-action" onclick="app.openPreview(\'' + escapeHtml(item.path) + '\', \'' + escapeHtml(item.name) + '\', \'' + item.preview_type + '\', \'' + item.size_h + '\')" title="Vista previa"><i class="fas fa-eye"></i></button>';
-                    }
-
-                    if (item.is_dir) {
-                        actionsCol += '<a href="/files/api/files.php?action=zip&source=' + encodeURIComponent(self.source) + '&path=' + encodeURIComponent(item.path) + '" class="btn btn-outline-secondary btn-action" title="Descargar como .ZIP"><i class="fas fa-file-archive"></i></a>';
-                    } else {
-                        actionsCol += '<a href="/files/api/files.php?action=download&source=' + encodeURIComponent(self.source) + '&path=' + encodeURIComponent(item.path) + '" class="btn btn-outline-success btn-action" title="Descargar"><i class="fas fa-download"></i></a>';
-                    }
-
-                    actionsCol += '<button type="button" class="btn btn-outline-primary btn-action" onclick="app.openShareModal(\'' + escapeHtml(item.path) + '\', \'' + escapeHtml(item.name) + '\')" title="Compartir enlace"><i class="fas fa-share-alt"></i></button>';
-                    actionsCol += '<button type="button" class="btn btn-outline-warning btn-action" onclick="app.openRenameModal(\'' + escapeHtml(item.path) + '\', \'' + escapeHtml(item.name) + '\')" title="Renombrar"><i class="fas fa-edit"></i></button>';
-                    actionsCol += '<button type="button" class="btn btn-outline-danger btn-action" onclick="app.deleteItem(\'' + escapeHtml(item.path) + '\', \'' + escapeHtml(item.name) + '\', ' + item.is_dir + ')" title="Eliminar"><i class="fas fa-trash-alt"></i></button>';
-                    actionsCol += '</div>';
-
-                    self.filesTable.row.add([
-                        iconCol,
-                        nameCol,
-                        item.size_h,
-                        item.modified_h,
-                        actionsCol
-                    ]);
+                res.items.forEach(function (it) {
+                    items.push(it);
                 });
 
-                self.filesTable.draw();
+                p.items = items;
+                self.filterPanel(panelKey, $('#filter-' + panelKey).val());
             },
             error: function () {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo cargar el directorio' });
+                $tbody.html('<tr><td colspan="5" class="text-center py-3 text-danger">Error al cargar contenido.</td></tr>');
             }
         });
     },
 
-    renderBreadcrumbs: function (breadcrumbs) {
+    filterPanel: function (panelKey, query) {
+        const p = this.panels[panelKey];
+        query = (query || '').toLowerCase().trim();
+
+        p.filteredIndices = [];
+        p.items.forEach(function (item, idx) {
+            if (item.is_up) {
+                p.filteredIndices.push(idx);
+                return;
+            }
+            if (query === '' || item.name.toLowerCase().indexOf(query) !== -1) {
+                p.filteredIndices.push(idx);
+            }
+        });
+
+        p.focusedIndex = Math.min(p.focusedIndex, Math.max(0, p.filteredIndices.length - 1));
+        this.renderPanelTable(panelKey);
+    },
+
+    renderPanelTable: function (panelKey) {
         const self = this;
-        const $ol = $('#fileBreadcrumbs');
+        const p = self.panels[panelKey];
+        const $tbody = $('#tbody-' + panelKey);
+        $tbody.empty();
+
+        if (p.filteredIndices.length === 0) {
+            $tbody.html('<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fas fa-folder-open fa-2x text-muted mb-2"></i><br>Carpeta vacía</td></tr>');
+            self.updatePanelSummary(panelKey);
+            return;
+        }
+
+        p.filteredIndices.forEach(function (rawIndex, displayIndex) {
+            const item = p.items[rawIndex];
+            const isSelected = p.selectedIndices.has(rawIndex);
+            const isFocused = (displayIndex === p.focusedIndex);
+
+            let rowClass = '';
+            if (isSelected) rowClass += ' row-selected';
+            if (isFocused && self.activePanel === panelKey) rowClass += ' row-focused';
+
+            const chkHtml = item.is_up ? '' :
+                '<input type="checkbox" class="chk-item" data-panel="' + panelKey + '" data-idx="' + rawIndex + '" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation()">';
+
+            const nameHtml = item.is_dir ?
+                '<strong class="text-dark"><i class="' + item.icon + ' mr-1"></i> ' + escapeHtml(item.name) + '</strong>' :
+                '<span class="text-dark"><i class="' + item.icon + ' mr-1"></i> ' + escapeHtml(item.name) + '</span>';
+
+            const row = $('<tr class="' + rowClass + '" data-display-idx="' + displayIndex + '" data-raw-idx="' + rawIndex + '">' +
+                '<td class="text-center">' + chkHtml + '</td>' +
+                '<td class="text-center"><i class="' + item.icon + '"></i></td>' +
+                '<td>' + nameHtml + '</td>' +
+                '<td class="text-right small text-muted font-weight-bold">' + (item.is_dir ? '&lt;DIR&gt;' : item.size_h) + '</td>' +
+                '<td class="text-right small text-muted">' + escapeHtml(item.modified_h || '') + '</td>' +
+                '</tr>');
+
+            // Click row to focus and activate panel
+            row.on('click', function () {
+                self.setActivePanel(panelKey);
+                p.focusedIndex = displayIndex;
+                self.renderPanelTable(panelKey);
+            });
+
+            // Double click to open folder or preview file
+            row.on('dblclick', function () {
+                self.activateItem(panelKey, item);
+            });
+
+            // Checkbox change
+            row.find('.chk-item').on('change', function () {
+                self.toggleItemSelection(panelKey, rawIndex);
+            });
+
+            $tbody.append(row);
+        });
+
+        self.scrollFocusedIntoView(panelKey);
+        self.updatePanelSummary(panelKey);
+    },
+
+    renderBreadcrumbs: function (panelKey, breadcrumbs) {
+        const $ol = $('#breadcrumbs-' + panelKey);
         $ol.empty();
 
         breadcrumbs.forEach(function (bc, idx) {
             const isLast = (idx === breadcrumbs.length - 1);
             if (isLast) {
-                $ol.append('<li class="breadcrumb-item active font-weight-bold text-dark">' + escapeHtml(bc.name) + '</li>');
+                $ol.append('<li class="breadcrumb-item active font-weight-bold text-truncate" style="max-width: 140px;">' + escapeHtml(bc.name) + '</li>');
             } else {
-                $ol.append('<li class="breadcrumb-item"><a href="javascript:void(0)" onclick="app.loadPath(\'' + escapeHtml(bc.path) + '\')">' + escapeHtml(bc.name) + '</a></li>');
+                $ol.append('<li class="breadcrumb-item"><a href="javascript:void(0)" onclick="app.loadPanelPath(\'' + panelKey + '\', \'' + escapeHtml(bc.path) + '\')">' + escapeHtml(bc.name) + '</a></li>');
             }
         });
     },
 
-    openPreview: function (path, name, type, sizeStr) {
-        const self = this;
-        $('#lblPreviewTitle').html('<i class="fas fa-eye mr-2"></i> ' + escapeHtml(name));
-        $('#lblPreviewSize').text('Tamaño: ' + sizeStr);
-        $('#btnDownloadFromPreview').attr('href', '/files/api/files.php?action=download&source=' + encodeURIComponent(self.source) + '&path=' + encodeURIComponent(path));
+    updatePanelSummary: function (panelKey) {
+        const p = this.panels[panelKey];
+        let totalFiles = 0;
+        let selectedCount = p.selectedIndices.size;
+        let selectedBytes = 0;
 
-        const $container = $('#previewContainer');
-        $container.html('<div class="py-5"><i class="fas fa-spinner fa-spin fa-3x text-primary"></i><p class="mt-2 text-muted">Cargando previsualización...</p></div>');
-        $('#modalPreview').modal('show');
-
-        const previewUrl = '/files/api/files.php?action=preview&source=' + encodeURIComponent(self.source) + '&path=' + encodeURIComponent(path);
-
-        if (type === 'image') {
-            $container.html('<img src="' + previewUrl + '" class="img-fluid rounded shadow-sm" style="max-height: 65vh;">');
-        } else if (type === 'pdf') {
-            $container.html('<iframe src="' + previewUrl + '" style="width: 100%; height: 65vh; border: none;" class="rounded shadow-sm"></iframe>');
-        } else if (type === 'video') {
-            $container.html('<video controls autoplay class="w-100 rounded shadow-sm" style="max-height: 65vh;"><source src="' + previewUrl + '">Tu navegador no soporta reproducción de video.</video>');
-        } else if (type === 'audio') {
-            $container.html('<div class="py-5"><i class="fas fa-music fa-4x text-info mb-3"></i><br><audio controls class="w-70"><source src="' + previewUrl + '">Tu navegador no soporta audio.</audio></div>');
-        } else if (type === 'text') {
-            $.getJSON(previewUrl, function (res) {
-                if (res.success) {
-                    $container.html('<pre class="preview-text">' + escapeHtml(res.content) + '</pre>');
-                } else {
-                    $container.html('<div class="alert alert-danger">Error al cargar texto: ' + escapeHtml(res.error) + '</div>');
+        p.items.forEach(function (it, idx) {
+            if (!it.is_up) {
+                totalFiles++;
+                if (p.selectedIndices.has(idx)) {
+                    selectedBytes += (it.size || 0);
                 }
-            }).fail(function () {
-                $container.html('<div class="alert alert-danger">Error al obtener el contenido del archivo.</div>');
-            });
-        } else {
-            $container.html('<div class="py-4 text-muted"><i class="fas fa-file fa-4x mb-2"></i><p>Este formato de archivo no soporta previsualización en el navegador.</p></div>');
+            }
+        });
+
+        const selectedStr = selectedCount > 0 ?
+            ' | <b class="text-primary">' + selectedCount + ' seleccionados</b> (' + this.formatBytes(selectedBytes) + ')' :
+            ' | 0 seleccionados';
+
+        $('#summary-' + panelKey).html('<b>' + totalFiles + '</b> elementos' + selectedStr);
+    },
+
+    highlightFocusedRow: function (panelKey) {
+        const p = this.panels[panelKey];
+        $('#tbl-' + panelKey + ' tbody tr').removeClass('row-focused');
+
+        if (this.activePanel === panelKey) {
+            const $row = $('#tbl-' + panelKey + ' tbody tr[data-display-idx="' + p.focusedIndex + '"]');
+            $row.addClass('row-focused');
+            this.scrollFocusedIntoView(panelKey);
         }
     },
 
-    openRenameModal: function (path, currentName) {
-        $('#txtRenamePath').val(path);
-        $('#txtRenameNewName').val(currentName);
-        $('#modalRename').modal('show');
-        setTimeout(function () { $('#txtRenameNewName').focus().select(); }, 400);
+    scrollFocusedIntoView: function (panelKey) {
+        const p = this.panels[panelKey];
+        const container = $('#panel-' + panelKey + ' .panel-table-container')[0];
+        const row = $('#tbl-' + panelKey + ' tbody tr[data-display-idx="' + p.focusedIndex + '"]')[0];
+
+        if (container && row) {
+            const cTop = container.scrollTop;
+            const cBottom = cTop + container.clientHeight;
+            const rTop = row.offsetTop;
+            const rBottom = rTop + row.offsetHeight;
+
+            if (rTop < cTop) {
+                container.scrollTop = rTop - 30;
+            } else if (rBottom > cBottom) {
+                container.scrollTop = rBottom - container.clientHeight + 30;
+            }
+        }
     },
 
-    openShareModal: function (path, name) {
-        $('#txtSharePath').val(path);
-        $('#lblShareItemName').text(name);
-        $('#txtSharePassword').val('');
-        $('#selShareExpires').val('');
-        $('#shareResultArea').hide();
-        $('#txtGeneratedShareUrl').val('');
-        $('#modalShare').modal('show');
+    /* =========================================================================
+     * KEYBOARD NAVIGATION & MC STYLE SELECTION
+     * ========================================================================= */
+    handleCommanderKey: function (e) {
+        const panelKey = this.activePanel;
+        const p = this.panels[panelKey];
+        const total = p.filteredIndices.length;
+
+        switch (e.key) {
+            // TAB: Switch panels
+            case 'Tab':
+                e.preventDefault();
+                this.switchActivePanel();
+                break;
+
+            // ARROW DOWN: Move down
+            case 'ArrowDown':
+                e.preventDefault();
+                if (total > 0) {
+                    p.focusedIndex = Math.min(p.focusedIndex + 1, total - 1);
+                    this.renderPanelTable(panelKey);
+                }
+                break;
+
+            // ARROW UP: Move up
+            case 'ArrowUp':
+                e.preventDefault();
+                if (total > 0) {
+                    p.focusedIndex = Math.max(p.focusedIndex - 1, 0);
+                    this.renderPanelTable(panelKey);
+                }
+                break;
+
+            // SPACEBAR & INSERT: Select item and jump to next item (MC style)
+            case ' ':
+            case 'Insert':
+                e.preventDefault();
+                if (total > 0) {
+                    const rawIdx = p.filteredIndices[p.focusedIndex];
+                    const item = p.items[rawIdx];
+
+                    // Cannot select '..'
+                    if (!item.is_up) {
+                        this.toggleItemSelection(panelKey, rawIdx);
+                    }
+
+                    // Jump to next item
+                    p.focusedIndex = Math.min(p.focusedIndex + 1, total - 1);
+                    this.renderPanelTable(panelKey);
+                }
+                break;
+
+            // ENTER: Navigate or view
+            case 'Enter':
+                e.preventDefault();
+                if (total > 0) {
+                    const rawIdx = p.filteredIndices[p.focusedIndex];
+                    const item = p.items[rawIdx];
+                    this.activateItem(panelKey, item);
+                }
+                break;
+
+            // BACKSPACE: Go up directory
+            case 'Backspace':
+                e.preventDefault();
+                if (p.path !== '') {
+                    const parts = p.path.split('/');
+                    parts.pop();
+                    this.loadPanelPath(panelKey, parts.join('/'));
+                }
+                break;
+
+            // ASTERISK or CTRL+A: Invert selection
+            case '*':
+                e.preventDefault();
+                this.invertSelection(panelKey);
+                break;
+
+            // FUNCTION KEYS
+            case 'F1':
+                e.preventDefault();
+                this.showHelp();
+                break;
+            case 'F3':
+                e.preventDefault();
+                this.actionView();
+                break;
+            case 'F4':
+                e.preventDefault();
+                this.actionEdit();
+                break;
+            case 'F5':
+                e.preventDefault();
+                this.actionCopyBatch();
+                break;
+            case 'F6':
+                e.preventDefault();
+                this.actionMoveBatch();
+                break;
+            case 'F7':
+                e.preventDefault();
+                this.actionNewFolder();
+                break;
+            case 'F8':
+            case 'Delete':
+                e.preventDefault();
+                this.actionDeleteBatch();
+                break;
+            case 'F9':
+                e.preventDefault();
+                this.actionToggleSource();
+                break;
+        }
     },
 
-    deleteItem: function (path, name, isDir) {
+    toggleItemSelection: function (panelKey, rawIndex) {
+        const p = this.panels[panelKey];
+        if (p.selectedIndices.has(rawIndex)) {
+            p.selectedIndices.delete(rawIndex);
+        } else {
+            p.selectedIndices.add(rawIndex);
+        }
+        this.updatePanelSummary(panelKey);
+    },
+
+    selectAll: function (panelKey, select) {
+        const p = this.panels[panelKey];
+        p.selectedIndices.clear();
+        if (select) {
+            p.filteredIndices.forEach(function (idx) {
+                if (!p.items[idx].is_up) {
+                    p.selectedIndices.add(idx);
+                }
+            });
+        }
+        this.renderPanelTable(panelKey);
+    },
+
+    invertSelection: function (panelKey) {
+        const p = this.panels[panelKey];
+        p.filteredIndices.forEach(function (idx) {
+            if (!p.items[idx].is_up) {
+                if (p.selectedIndices.has(idx)) {
+                    p.selectedIndices.delete(idx);
+                } else {
+                    p.selectedIndices.add(idx);
+                }
+            }
+        });
+        this.renderPanelTable(panelKey);
+    },
+
+    activateItem: function (panelKey, item) {
+        if (item.is_dir) {
+            this.loadPanelPath(panelKey, item.path);
+        } else {
+            this.actionView();
+        }
+    },
+
+    getFocusedItem: function (panelKey) {
+        const p = this.panels[panelKey];
+        if (p.filteredIndices.length === 0) return null;
+        const rawIdx = p.filteredIndices[p.focusedIndex];
+        return p.items[rawIdx] || null;
+    },
+
+    getSelectedItems: function (panelKey) {
+        const p = this.panels[panelKey];
+        const selected = [];
+        p.selectedIndices.forEach(function (rawIdx) {
+            if (p.items[rawIdx] && !p.items[rawIdx].is_up) {
+                selected.push(p.items[rawIdx]);
+            }
+        });
+
+        // If none selected, fallback to the focused item (unless it's '..')
+        if (selected.length === 0) {
+            const focused = this.getFocusedItem(panelKey);
+            if (focused && !focused.is_up) {
+                selected.push(focused);
+            }
+        }
+
+        return selected;
+    },
+
+    /* =========================================================================
+     * COMMANDER ACTIONS (F1 - F9)
+     * ========================================================================= */
+    showHelp: function () {
+        $('#modalShortcutsHelp').modal('show');
+    },
+
+    actionView: function () {
+        const item = this.getFocusedItem(this.activePanel);
+        if (!item || item.is_up) return;
+
+        if (item.is_dir) {
+            this.loadPanelPath(this.activePanel, item.path);
+            return;
+        }
+
+        const panel = this.panels[this.activePanel];
+        this.openPreviewModal(panel.source, item.path, item.name, item.preview_type, item.size_h);
+    },
+
+    actionEdit: function () {
+        const item = this.getFocusedItem(this.activePanel);
+        if (!item || item.is_up || item.is_dir) return;
+
+        const panel = this.panels[this.activePanel];
+        this.openEditorModal(panel.source, item.path, item.name);
+    },
+
+    actionCopyBatch: function () {
         const self = this;
-        const itemType = isDir ? 'la carpeta y todo su contenido' : 'el archivo';
+        const srcPanelKey = self.activePanel;
+        const dstPanelKey = (srcPanelKey === 'left') ? 'right' : 'left';
+        const srcPanel = self.panels[srcPanelKey];
+        const dstPanel = self.panels[dstPanelKey];
+
+        const selected = self.getSelectedItems(srcPanelKey);
+        if (selected.length === 0) {
+            Swal.fire({ icon: 'info', title: 'Nada para copiar', text: 'Selecciona o enfoca un elemento para copiar.' });
+            return;
+        }
+
+        const count = selected.length;
+        const itemNames = selected.map(function (it) { return it.name; }).slice(0, 5).join(', ') + (count > 5 ? '...' : '');
+        const targetDesc = dstPanel.source.toUpperCase() + ': /' + (dstPanel.path || '(raíz)');
 
         Swal.fire({
-            title: '¿Eliminar ' + (isDir ? 'carpeta' : 'archivo') + '?',
-            text: '¿Estás seguro de que deseas eliminar ' + itemType + ' "' + name + '"? Esta acción no se puede deshacer.',
-            icon: 'warning',
+            title: '¿Copiar ' + count + ' elemento(s)?',
+            html: '<p class="mb-2"><b>Elementos:</b> ' + escapeHtml(itemNames) + '</p>' +
+                  '<p class="mb-0 text-primary"><b>Destino:</b> <code>' + escapeHtml(targetDesc) + '</code></p>',
+            icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, eliminar',
+            confirmButtonColor: '#007bff',
+            confirmButtonText: '<i class="fas fa-copy mr-1"></i> Sí, copiar [F5]',
             cancelButtonText: 'Cancelar'
-        }).then(function (result) {
-            if (result.isConfirmed) {
+        }).then(function (res) {
+            if (res.isConfirmed) {
+                Swal.fire({
+                    title: 'Copiando...',
+                    allowOutsideClick: false,
+                    didOpen: function () { Swal.showLoading(); }
+                });
+
+                const paths = selected.map(function (it) { return it.path; });
+
                 $.ajax({
-                    url: '/files/api/files.php?action=delete',
+                    url: '/files/api/files.php?action=copy_batch',
                     type: 'POST',
                     data: {
-                        source: self.source,
-                        path: path
+                        src_source: srcPanel.source,
+                        dest_source: dstPanel.source,
+                        dest_path: dstPanel.path,
+                        items: paths
                     },
                     dataType: 'json',
-                    success: function (res) {
-                        if (res.success) {
+                    success: function (resp) {
+                        if (resp.success) {
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Eliminado',
-                                text: res.message,
-                                timer: 1200,
+                                title: 'Copia completada',
+                                text: resp.message,
+                                timer: 1500,
                                 showConfirmButton: false
                             });
-                            self.loadPath(self.currentPath);
+                            self.loadPanelPath(dstPanelKey, dstPanel.path);
                         } else {
-                            Swal.fire({ icon: 'error', title: 'Error', text: res.error });
+                            Swal.fire({ icon: 'error', title: 'Error al copiar', text: resp.error || 'Ocurrió un error al copiar.' });
                         }
                     },
                     error: function () {
@@ -525,16 +751,339 @@ const app = {
         });
     },
 
+    actionMoveBatch: function () {
+        const self = this;
+        const srcPanelKey = self.activePanel;
+        const dstPanelKey = (srcPanelKey === 'left') ? 'right' : 'left';
+        const srcPanel = self.panels[srcPanelKey];
+        const dstPanel = self.panels[dstPanelKey];
+
+        const selected = self.getSelectedItems(srcPanelKey);
+        if (selected.length === 0) {
+            Swal.fire({ icon: 'info', title: 'Nada para mover', text: 'Selecciona o enfoca un elemento para mover.' });
+            return;
+        }
+
+        const count = selected.length;
+        const itemNames = selected.map(function (it) { return it.name; }).slice(0, 5).join(', ') + (count > 5 ? '...' : '');
+        const targetDesc = dstPanel.source.toUpperCase() + ': /' + (dstPanel.path || '(raíz)');
+
+        Swal.fire({
+            title: '¿Mover ' + count + ' elemento(s)?',
+            html: '<p class="mb-2"><b>Elementos:</b> ' + escapeHtml(itemNames) + '</p>' +
+                  '<p class="mb-0 text-warning"><b>Destino:</b> <code>' + escapeHtml(targetDesc) + '</code></p>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            confirmButtonText: '<i class="fas fa-arrows-alt mr-1"></i> Sí, mover [F6]',
+            cancelButtonText: 'Cancelar'
+        }).then(function (res) {
+            if (res.isConfirmed) {
+                Swal.fire({
+                    title: 'Moviendo...',
+                    allowOutsideClick: false,
+                    didOpen: function () { Swal.showLoading(); }
+                });
+
+                const paths = selected.map(function (it) { return it.path; });
+
+                $.ajax({
+                    url: '/files/api/files.php?action=move_batch',
+                    type: 'POST',
+                    data: {
+                        src_source: srcPanel.source,
+                        dest_source: dstPanel.source,
+                        dest_path: dstPanel.path,
+                        items: paths
+                    },
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Movimiento completado',
+                                text: resp.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            });
+                            self.loadPanelPath(srcPanelKey, srcPanel.path);
+                            self.loadPanelPath(dstPanelKey, dstPanel.path);
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error al mover', text: resp.error || 'Ocurrió un error al mover.' });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor' });
+                    }
+                });
+            }
+        });
+    },
+
+    actionDeleteBatch: function () {
+        const self = this;
+        const panelKey = self.activePanel;
+        const panel = self.panels[panelKey];
+
+        const selected = self.getSelectedItems(panelKey);
+        if (selected.length === 0) {
+            Swal.fire({ icon: 'info', title: 'Nada para borrar', text: 'Selecciona o enfoca un elemento para eliminar.' });
+            return;
+        }
+
+        const count = selected.length;
+        const itemNames = selected.map(function (it) { return it.name; }).slice(0, 5).join(', ') + (count > 5 ? '...' : '');
+
+        Swal.fire({
+            title: '¿Eliminar ' + count + ' elemento(s)?',
+            html: '<p class="text-danger font-weight-bold">Esta acción no se puede deshacer.</p>' +
+                  '<p><b>Elementos:</b> ' + escapeHtml(itemNames) + '</p>',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Sí, eliminar [F8]',
+            cancelButtonText: 'Cancelar'
+        }).then(function (res) {
+            if (res.isConfirmed) {
+                Swal.fire({
+                    title: 'Eliminando...',
+                    allowOutsideClick: false,
+                    didOpen: function () { Swal.showLoading(); }
+                });
+
+                const paths = selected.map(function (it) { return it.path; });
+
+                $.ajax({
+                    url: '/files/api/files.php?action=delete_batch',
+                    type: 'POST',
+                    data: {
+                        source: panel.source,
+                        items: paths
+                    },
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Eliminado',
+                                text: resp.message,
+                                timer: 1200,
+                                showConfirmButton: false
+                            });
+                            self.loadPanelPath(panelKey, panel.path);
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error al eliminar', text: resp.error || 'Error al eliminar.' });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor' });
+                    }
+                });
+            }
+        });
+    },
+
+    actionNewFolder: function () {
+        this.promptNewFolder(this.activePanel);
+    },
+
+    promptNewFolder: function (panelKey) {
+        const self = this;
+        const panel = self.panels[panelKey];
+
+        Swal.fire({
+            title: 'Nueva Carpeta [F7]',
+            text: 'Ingresa el nombre para la nueva carpeta en ' + panel.source.toUpperCase() + ':/' + (panel.path || ''),
+            input: 'text',
+            inputPlaceholder: 'Nombre de la carpeta...',
+            showCancelButton: true,
+            confirmButtonText: '<i class="fas fa-check mr-1"></i> Crear',
+            cancelButtonText: 'Cancelar',
+            inputValidator: function (value) {
+                if (!value || !value.trim()) {
+                    return 'El nombre de la carpeta no puede estar vacío';
+                }
+            }
+        }).then(function (res) {
+            if (res.isConfirmed && res.value) {
+                $.ajax({
+                    url: '/files/api/files.php?action=mkdir',
+                    type: 'POST',
+                    data: {
+                        source: panel.source,
+                        path: panel.path,
+                        name: res.value.trim()
+                    },
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.success) {
+                            Swal.fire({ icon: 'success', title: 'Carpeta creada', timer: 1200, showConfirmButton: false });
+                            self.loadPanelPath(panelKey, panel.path);
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error', text: resp.error });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor' });
+                    }
+                });
+            }
+        });
+    },
+
+    actionToggleSource: function () {
+        const panelKey = this.activePanel;
+        const currentSrc = this.panels[panelKey].source;
+        const newSrc = (currentSrc === 'local') ? 'usb' : 'local';
+        this.setPanelSource(panelKey, newSrc);
+    },
+
+    openUploadModal: function (panelKey) {
+        this.uploadTargetPanel = panelKey;
+        if (this.dropzoneInstance) {
+            this.dropzoneInstance.removeAllFiles();
+        }
+        $('#modalUpload').modal('show');
+    },
+
+    refreshAll: function () {
+        this.loadPanelPath('left', this.panels.left.path);
+        this.loadPanelPath('right', this.panels.right.path);
+    },
+
+    /* =========================================================================
+     * F4 EDITOR MODAL & SAVE
+     * ========================================================================= */
+    openEditorModal: function (source, path, filename) {
+        const self = this;
+        $('#txtEditorSource').val(source);
+        $('#txtEditorPath').val(path);
+        $('#lblEditorFilename').text(filename + ' (' + source.toUpperCase() + ')');
+        $('#txtEditorContent').val('Cargando contenido...');
+        $('#modalEditor').modal('show');
+
+        $.ajax({
+            url: '/files/api/files.php?action=read_edit',
+            type: 'GET',
+            data: { source: source, path: path },
+            dataType: 'json',
+            success: function (res) {
+                if (res.success) {
+                    $('#txtEditorContent').val(res.content);
+                    $('#lblEditorStats').text(res.size_h + ' | ' + (res.ext ? res.ext.toUpperCase() : 'TXT'));
+                    self.updateEditorStats();
+                    setTimeout(function () {
+                        $('#txtEditorContent').focus();
+                    }, 400);
+                } else {
+                    $('#modalEditor').modal('hide');
+                    Swal.fire({ icon: 'error', title: 'Error al abrir', text: res.error });
+                }
+            },
+            error: function () {
+                $('#modalEditor').modal('hide');
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Error al leer el archivo' });
+            }
+        });
+    },
+
+    updateEditorStats: function () {
+        const textarea = document.getElementById('txtEditorContent');
+        if (!textarea) return;
+
+        const val = textarea.value;
+        const selStart = textarea.selectionStart;
+        const lines = val.substr(0, selStart).split('\n');
+        const lineNum = lines.length;
+        const colNum = lines[lines.length - 1].length + 1;
+        const totalLines = val.split('\n').length;
+
+        $('#lblEditorCursor').text('Línea ' + lineNum + ' de ' + totalLines + ', Columna ' + colNum + ' | [Ctrl+S] para guardar');
+    },
+
+    saveEditorContent: function () {
+        const self = this;
+        const source = $('#txtEditorSource').val();
+        const path = $('#txtEditorPath').val();
+        const content = $('#txtEditorContent').val();
+        const $btn = $('#btnSaveEditor');
+
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Guardando...');
+
+        $.ajax({
+            url: '/files/api/files.php?action=save_edit',
+            type: 'POST',
+            data: {
+                source: source,
+                path: path,
+                content: content
+            },
+            dataType: 'json',
+            success: function (res) {
+                $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Guardar [F2 / Ctrl+S]');
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Guardado',
+                        text: res.message || 'Archivo guardado con éxito',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+                    self.loadPanelPath(self.activePanel, self.panels[self.activePanel].path);
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error al guardar', text: res.error });
+                }
+            },
+            error: function () {
+                $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Guardar [F2 / Ctrl+S]');
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor' });
+            }
+        });
+    },
+
+    /* =========================================================================
+     * F3 PREVIEW MODAL
+     * ========================================================================= */
+    openPreviewModal: function (source, path, name, type, sizeStr) {
+        $('#lblPreviewTitle').html('<i class="fas fa-eye mr-2"></i> ' + escapeHtml(name));
+        $('#lblPreviewSize').text('Tamaño: ' + sizeStr + ' (' + source.toUpperCase() + ')');
+        $('#btnDownloadFromPreview').attr('href', '/files/api/files.php?action=download&source=' + encodeURIComponent(source) + '&path=' + encodeURIComponent(path));
+
+        const $container = $('#previewContainer');
+        $container.html('<div class="py-5"><i class="fas fa-spinner fa-spin fa-3x text-primary"></i><p class="mt-2 text-muted">Cargando previsualización...</p></div>');
+        $('#modalPreview').modal('show');
+
+        const previewUrl = '/files/api/files.php?action=preview&source=' + encodeURIComponent(source) + '&path=' + encodeURIComponent(path);
+
+        if (type === 'image') {
+            $container.html('<img src="' + previewUrl + '" class="img-fluid rounded shadow-sm" style="max-height: 65vh;">');
+        } else if (type === 'pdf') {
+            $container.html('<iframe src="' + previewUrl + '" style="width: 100%; height: 65vh; border: none;" class="rounded shadow-sm"></iframe>');
+        } else if (type === 'video') {
+            $container.html('<video controls autoplay class="w-100 rounded shadow-sm" style="max-height: 65vh;"><source src="' + previewUrl + '">Tu navegador no soporta video.</video>');
+        } else if (type === 'audio') {
+            $container.html('<div class="py-5"><i class="fas fa-music fa-4x text-info mb-3"></i><br><audio controls class="w-75"><source src="' + previewUrl + '">Tu navegador no soporta audio.</audio></div>');
+        } else if (type === 'text') {
+            $.getJSON(previewUrl, function (res) {
+                if (res.success) {
+                    $container.html('<pre class="preview-text">' + escapeHtml(res.content) + '</pre>');
+                } else {
+                    $container.html('<div class="alert alert-danger">Error: ' + escapeHtml(res.error) + '</div>');
+                }
+            }).fail(function () {
+                $container.html('<div class="alert alert-danger">Error al cargar texto.</div>');
+            });
+        } else {
+            $container.html('<div class="py-4 text-muted"><i class="fas fa-file fa-4x mb-2"></i><p>Formato sin visor integrado. Usa el botón Descargar.</p></div>');
+        }
+    },
+
     /* =========================================================================
      * USB DEVICES MANAGEMENT VIEW
      * ========================================================================= */
     initUsbView: function () {
         const self = this;
-
-        $('#btnRefreshUsb').on('click', function () {
-            self.loadUsbDevices();
-        });
-
+        $('#btnRefreshUsb').on('click', function () { self.loadUsbDevices(); });
         self.loadUsbDevices();
     },
 
@@ -546,12 +1095,12 @@ const app = {
         $.getJSON('/files/api/usb.php?action=devices', function (res) {
             $tbody.empty();
             if (!res.success) {
-                $tbody.html('<tr><td colspan="7" class="text-center py-3 text-danger"><i class="fas fa-exclamation-circle mr-1"></i> ' + escapeHtml(res.error) + '</td></tr>');
+                $tbody.html('<tr><td colspan="7" class="text-center py-3 text-danger">' + escapeHtml(res.error) + '</td></tr>');
                 return;
             }
 
             if (!res.devices || res.devices.length === 0) {
-                $tbody.html('<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-info-circle mr-1"></i> No se detectaron particiones o discos extraíbles disponibles.</td></tr>');
+                $tbody.html('<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-info-circle mr-1"></i> No se detectaron unidades extraíbles.</td></tr>');
                 return;
             }
 
@@ -564,7 +1113,7 @@ const app = {
                     badgeClass = 'badge-success';
                     statusText = 'Montado en /media/usb';
                     actionBtn = '<div class="btn-group btn-group-sm">' +
-                        '<a href="/files/?source=usb" class="btn btn-outline-primary btn-sm"><i class="fas fa-folder-open mr-1"></i> Explorar</a>' +
+                        '<a href="/files/" class="btn btn-outline-primary btn-sm"><i class="fas fa-columns mr-1"></i> Abrir en Commander</a>' +
                         '<button class="btn btn-danger btn-sm" onclick="app.unmountUsb()"><i class="fas fa-eject mr-1"></i> Desmontar</button>' +
                         '</div>';
                 } else if (dev.is_mounted) {
@@ -577,7 +1126,7 @@ const app = {
 
                 const row = '<tr>' +
                     '<td><strong>' + escapeHtml(dev.device_path) + '</strong></td>' +
-                    '<td>' + (dev.label ? '<span class="badge badge-light border">' + escapeHtml(dev.label) + '</span>' : '<span class="text-muted">Sin etiqueta</span>') + '</td>' +
+                    '<td>' + (dev.label ? '<span class="badge badge-light border">' + escapeHtml(dev.label) + '</span>' : '<span class="text-muted">-</span>') + '</td>' +
                     '<td>' + escapeHtml(dev.model || '-') + '</td>' +
                     '<td><span class="badge badge-secondary">' + escapeHtml(dev.fstype || 'desconocido') + '</span></td>' +
                     '<td><strong>' + escapeHtml(dev.size) + '</strong></td>' +
@@ -588,19 +1137,16 @@ const app = {
                 $tbody.append(row);
             });
         }).fail(function () {
-            $tbody.html('<tr><td colspan="7" class="text-center py-3 text-danger"><i class="fas fa-exclamation-triangle mr-1"></i> Error al conectar con el servicio USB.</td></tr>');
+            $tbody.html('<tr><td colspan="7" class="text-center py-3 text-danger">Error al conectar con el servicio USB.</td></tr>');
         });
     },
 
     mountUsb: function (devicePath) {
-        const self = this;
         Swal.fire({
             title: 'Montando unidad...',
             text: 'Espere mientras se monta ' + devicePath + ' en /media/usb',
             allowOutsideClick: false,
-            didOpen: function () {
-                Swal.showLoading();
-            }
+            didOpen: function () { Swal.showLoading(); }
         });
 
         $.ajax({
@@ -614,15 +1160,9 @@ const app = {
                         icon: 'success',
                         title: '¡Unidad Montada!',
                         text: res.message,
-                        showCancelButton: true,
-                        confirmButtonText: '<i class="fas fa-folder-open mr-1"></i> Explorar Archivos',
-                        cancelButtonText: 'Quedarse aquí'
-                    }).then(function (result) {
-                        if (result.isConfirmed) {
-                            window.location.href = '/files/?source=usb';
-                        } else {
-                            window.location.reload();
-                        }
+                        confirmButtonText: 'Ir al Gestor Commander'
+                    }).then(function () {
+                        window.location.href = '/files/';
                     });
                 } else {
                     Swal.fire({ icon: 'error', title: 'Error al montar', text: res.error });
@@ -635,15 +1175,13 @@ const app = {
     },
 
     unmountUsb: function () {
-        const self = this;
         Swal.fire({
             title: '¿Desmontar unidad USB?',
-            text: 'Asegúrate de que no haya transferencias de archivos en curso antes de continuar.',
+            text: 'Asegúrate de que no haya transferencias de archivos en curso.',
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
-            confirmButtonText: 'Sí, expulsar / desmontar',
+            confirmButtonText: 'Sí, desmontar',
             cancelButtonText: 'Cancelar'
         }).then(function (result) {
             if (result.isConfirmed) {
@@ -685,11 +1223,7 @@ const app = {
      * ========================================================================= */
     initSharesView: function () {
         const self = this;
-
-        $('#btnRefreshShares').on('click', function () {
-            self.loadShares();
-        });
-
+        $('#btnRefreshShares').on('click', function () { self.loadShares(); });
         self.loadShares();
     },
 
@@ -753,13 +1287,7 @@ const app = {
             input.select();
             input.setSelectionRange(0, 99999);
             navigator.clipboard.writeText(input.value).then(function () {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Copiado',
-                    text: 'Enlace copiado al portapapeles',
-                    timer: 1200,
-                    showConfirmButton: false
-                });
+                Swal.fire({ icon: 'success', title: 'Copiado', timer: 1000, showConfirmButton: false });
             });
         }
     },
@@ -772,7 +1300,6 @@ const app = {
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
-            cancelButtonColor: '#3085d6',
             confirmButtonText: 'Sí, revocar enlace',
             cancelButtonText: 'Cancelar'
         }).then(function (result) {
@@ -784,13 +1311,7 @@ const app = {
                     dataType: 'json',
                     success: function (res) {
                         if (res.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Revocado',
-                                text: 'El enlace ha sido eliminado',
-                                timer: 1200,
-                                showConfirmButton: false
-                            });
+                            Swal.fire({ icon: 'success', title: 'Revocado', timer: 1200, showConfirmButton: false });
                             self.loadShares();
                         } else {
                             Swal.fire({ icon: 'error', title: 'Error', text: res.error });
@@ -802,6 +1323,16 @@ const app = {
                 });
             }
         });
+    },
+
+    formatBytes: function (bytes, precision) {
+        precision = precision || 2;
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        bytes = Math.max(bytes, 0);
+        let pow = Math.floor((bytes ? Math.log(bytes) : 0) / Math.log(1024));
+        pow = Math.min(pow, units.length - 1);
+        bytes /= Math.pow(1024, pow);
+        return bytes.toFixed(precision) + ' ' + units[pow];
     }
 };
 

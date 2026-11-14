@@ -229,6 +229,134 @@
     </div>
 </div>
 
+<!-- MODAL: Editor de Texto (F4) -->
+<div class="modal fade" id="modalEditor" tabindex="-1" role="dialog" aria-hidden="true" data-backdrop="static">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content shadow-lg border-primary">
+            <div class="modal-header py-2 bg-dark text-white">
+                <h5 class="modal-title font-weight-bold" id="lblEditorTitle">
+                    <i class="fas fa-edit text-warning mr-2"></i> Editando: <span id="lblEditorFilename">archivo.txt</span>
+                </h5>
+                <div class="ml-auto d-flex align-items-center">
+                    <span class="badge badge-info mr-3" id="lblEditorStats">UTF-8</span>
+                    <button type="button" class="btn btn-sm btn-success font-weight-bold mr-2" id="btnSaveEditor">
+                        <i class="fas fa-save mr-1"></i> Guardar [F2 / Ctrl+S]
+                    </button>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body p-0 bg-dark">
+                <input type="hidden" id="txtEditorSource">
+                <input type="hidden" id="txtEditorPath">
+                <textarea class="form-control editor-textarea" id="txtEditorContent" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            </div>
+            <div class="modal-footer py-2 bg-light d-flex justify-content-between">
+                <small class="text-muted" id="lblEditorCursor">Línea 1, Columna 1 | Presiona <kbd>Ctrl+S</kbd> para guardar rápidamente</small>
+                <div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary btn-sm font-weight-bold" id="btnSaveEditorBottom">
+                        <i class="fas fa-save mr-1"></i> Guardar Cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Ayuda de Teclado y Atajos Commander (F1) -->
+<div class="modal fade" id="modalShortcutsHelp" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content shadow">
+            <div class="modal-header py-2 bg-primary text-white">
+                <h5 class="modal-title font-weight-bold">
+                    <i class="fas fa-keyboard mr-2"></i> Atajos de Teclado - Modo Commander
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-3">
+                <p class="text-muted small mb-3">
+                    Inspirado en el clásico <b>Midnight Commander</b> y <b>Total Commander</b>, puedes gestionar todo el sistema usando exclusivamente el teclado:
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm table-striped">
+                        <thead class="thead-light">
+                            <tr>
+                                <th style="width: 170px;">Tecla / Atajo</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><kbd>Tab</kbd></td>
+                                <td>Alternar foco entre el <b>Panel Izquierdo</b> y el <b>Panel Derecho</b>.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>↑</kbd> / <kbd>↓</kbd></td>
+                                <td>Desplazar cursor entre los archivos y carpetas del panel activo.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Espacio</kbd> / <kbd>Insert</kbd></td>
+                                <td><b>Seleccionar / Deseleccionar</b> el elemento enfocado y <b>saltar al siguiente</b>.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Enter</kbd></td>
+                                <td>Entrar a la carpeta enfocada o ver/previsualizar el archivo.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Backspace</kbd></td>
+                                <td>Subir al directorio superior (nivel superior <code>..</code>).</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>*</kbd> o <kbd>Ctrl+A</kbd></td>
+                                <td>Invertir selección o seleccionar todos los archivos del panel.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F1</kbd></td>
+                                <td>Abrir esta ventana de ayuda y atajos.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F3</kbd></td>
+                                <td><b>Ver:</b> Previsualizar el archivo enfocado (imágenes, PDF, video, audio o texto).</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F4</kbd></td>
+                                <td><b>Editar:</b> Abrir editor de texto/código en pantalla para editar el archivo.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F5</kbd></td>
+                                <td><b>Copiar:</b> Copia masiva de los elementos seleccionados al <b>panel opuesto</b>.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F6</kbd></td>
+                                <td><b>Mover:</b> Mover masivo de los elementos seleccionados al <b>panel opuesto</b>.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F7</kbd></td>
+                                <td><b>Nueva Carpeta:</b> Crear un directorio en el panel activo.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F8</kbd> / <kbd>Supr</kbd></td>
+                                <td><b>Borrar:</b> Eliminar masivamente los elementos seleccionados del panel activo.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>F9</kbd></td>
+                                <td>Alternar origen de almacenamiento (<b>Local</b> ↔ <b>USB</b>) en el panel activo.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-primary btn-sm" data-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- REQUIRED SCRIPTS -->
 <script src="<?= BASE_URL ?>/public/assets/plugins/jquery/jquery.min.js"></script>
 <script src="<?= BASE_URL ?>/public/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>

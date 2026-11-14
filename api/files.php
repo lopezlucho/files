@@ -130,6 +130,75 @@ try {
             echo json_encode(['success' => true, 'stats' => $stats]);
             break;
 
+        case 'copy_batch':
+            header('Content-Type: application/json');
+            $srcSource = $_POST['src_source'] ?? 'local';
+            $destSource = $_POST['dest_source'] ?? 'local';
+            $destPath = $_POST['dest_path'] ?? '';
+            $rawItems = $_POST['items'] ?? [];
+            $items = is_array($rawItems) ? $rawItems : json_decode($rawItems, true);
+
+            if (empty($items) || !is_array($items)) {
+                echo json_encode(['success' => false, 'error' => 'No se seleccionaron elementos para copiar']);
+                exit;
+            }
+
+            $result = FileManager::copyBatch($srcSource, $items, $destSource, $destPath);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'COPY_BATCH', "Copiados " . count($items) . " elementos de {$srcSource} a {$destSource}:/{$destPath}");
+            echo json_encode($result);
+            break;
+
+        case 'move_batch':
+            header('Content-Type: application/json');
+            $srcSource = $_POST['src_source'] ?? 'local';
+            $destSource = $_POST['dest_source'] ?? 'local';
+            $destPath = $_POST['dest_path'] ?? '';
+            $rawItems = $_POST['items'] ?? [];
+            $items = is_array($rawItems) ? $rawItems : json_decode($rawItems, true);
+
+            if (empty($items) || !is_array($items)) {
+                echo json_encode(['success' => false, 'error' => 'No se seleccionaron elementos para mover']);
+                exit;
+            }
+
+            $result = FileManager::moveBatch($srcSource, $items, $destSource, $destPath);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'MOVE_BATCH', "Movidos " . count($items) . " elementos de {$srcSource} a {$destSource}:/{$destPath}");
+            echo json_encode($result);
+            break;
+
+        case 'delete_batch':
+            header('Content-Type: application/json');
+            $rawItems = $_POST['items'] ?? [];
+            $items = is_array($rawItems) ? $rawItems : json_decode($rawItems, true);
+
+            if (empty($items) || !is_array($items)) {
+                echo json_encode(['success' => false, 'error' => 'No se seleccionaron elementos para eliminar']);
+                exit;
+            }
+
+            $result = FileManager::deleteBatch($source, $items);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'DELETE_BATCH', "Eliminados " . count($items) . " elementos de {$source}");
+            echo json_encode($result);
+            break;
+
+        case 'read_edit':
+            header('Content-Type: application/json');
+            $data = FileManager::readFileForEdit($source, $path);
+            echo json_encode($data);
+            break;
+
+        case 'save_edit':
+            header('Content-Type: application/json');
+            $content = $_POST['content'] ?? '';
+            $result = FileManager::saveFileContent($source, $path, $content);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'SAVE_FILE', "Editado archivo '{$path}' en {$source}");
+            echo json_encode($result);
+            break;
+
         default:
             header('Content-Type: application/json');
             http_response_code(400);

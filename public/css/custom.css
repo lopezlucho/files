@@ -1,9 +1,10 @@
 /**
- * Custom styling for Cloud Files Manager
+ * Custom styling for Cloud Files Manager - Dual Panel Commander Mode
  */
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    user-select: none;
 }
 
 .table td, .table th {
@@ -11,8 +12,8 @@ body {
 }
 
 .file-icon {
-    font-size: 1.25rem;
-    width: 28px;
+    font-size: 1.15rem;
+    width: 24px;
     display: inline-block;
     text-align: center;
 }
@@ -44,31 +45,14 @@ body {
 
 .breadcrumb-item + .breadcrumb-item::before {
     content: "›";
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     line-height: 1;
     vertical-align: middle;
 }
 
 .storage-meter {
-    height: 8px;
-    border-radius: 4px;
-}
-
-.badge-usb-mounted {
-    background-color: #28a745;
-    color: #fff;
-    animation: pulse 2s infinite;
-}
-
-.badge-usb-unmounted {
-    background-color: #6c757d;
-    color: #fff;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.75; }
-    100% { opacity: 1; }
+    height: 6px;
+    border-radius: 3px;
 }
 
 .preview-container {
@@ -91,6 +75,153 @@ body {
 }
 
 .btn-action {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.85rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.8rem;
+}
+
+/* ==========================================================================
+ * DUAL PANEL COMMANDER STYLING
+ * ========================================================================== */
+
+.commander-panel {
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    background: #fff;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 200px);
+}
+
+.commander-panel.panel-active {
+    border-color: #007bff;
+    box-shadow: 0 0 10px rgba(0, 123, 255, 0.25);
+}
+
+.commander-panel .panel-header {
+    background: #f4f6f9;
+    border-bottom: 1px solid #dee2e6;
+    padding: 8px 12px;
+}
+
+.commander-panel.panel-active .panel-header {
+    background: #e7f1ff;
+    border-bottom-color: #b8daff;
+}
+
+.panel-table-container {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(100vh - 310px);
+    position: relative;
+}
+
+.commander-table {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.commander-table tbody tr {
+    cursor: pointer;
+    transition: background 0.05s ease;
+}
+
+.commander-table tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.07);
+}
+
+/* Focused Row (Active keyboard cursor) */
+.commander-table tbody tr.row-focused {
+    background-color: #cfe2ff !important;
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+}
+
+/* Selected Rows (Spacebar selection) */
+.commander-table tbody tr.row-selected {
+    background-color: #fff3cd !important;
+    color: #664d03;
+    font-weight: 600;
+}
+
+.commander-table tbody tr.row-selected.row-focused {
+    background-color: #ffe69c !important;
+    outline: 2px solid #fd7e14;
+}
+
+.commander-panel .panel-footer {
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* Function Keys Bar (Bottom MC Bar) */
+.commander-fn-bar {
+    display: flex;
+    background: #212529;
+    border-top: 2px solid #343a40;
+    padding: 4px;
+    gap: 4px;
+    position: sticky;
+    bottom: 0;
+    z-index: 1030;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.commander-fn-btn {
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #343a40;
+    color: #f8f9fa;
+    border: 1px solid #495057;
+    border-radius: 4px;
+    padding: 6px 2px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.commander-fn-btn:hover {
+    background: #007bff;
+    color: #fff;
+    border-color: #007bff;
+    text-decoration: none;
+}
+
+.commander-fn-btn .fn-badge {
+    background: #ffc107;
+    color: #000;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 800;
+    margin-right: 5px;
+    font-size: 0.75rem;
+}
+
+/* F4 Editor Textarea */
+.editor-textarea {
+    width: 100%;
+    height: 65vh;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.92rem;
+    background: #1e1e1e !important;
+    color: #e9ecef !important;
+    border: none;
+    border-radius: 0;
+    padding: 15px;
+    line-height: 1.5;
+    resize: none;
+    tab-size: 4;
+}
+
+.editor-textarea:focus {
+    box-shadow: none;
+    outline: none;
 }

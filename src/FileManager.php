@@ -433,6 +433,219 @@ class FileManager
     }
 
     /**
+     * Copy an item or directory recursively
+     */
+    public static function copyRecursive(string $src, string $dst): bool
+    {
+        if (is_dir($src)) {
+            if (!is_dir($dst)) {
+                if (!@mkdir($dst, 0775, true)) {
+                    return false;
+                }
+                @chmod($dst, 0775);
+            }
+            $files = array_diff(scandir($src), ['.', '..']);
+            foreach ($files as $file) {
+                if (!self::copyRecursive($src . '/' . $file, $dst . '/' . $file)) {
+                    return false;
+                }
+            }
+            return true;
+        } elseif (is_file($src)) {
+            $ok = @copy($src, $dst);
+            if ($ok) {
+                @chmod($dst, 0664);
+            }
+            return $ok;
+        }
+        return false;
+    }
+
+    /**
+     * Copy multiple items from source to destination directory
+     */
+    public static function copyBatch(string $srcSource, array $items, string $destSource, string $destRelativePath): array
+    {
+        $destFolder = self::resolvePath($destSource, $destRelativePath);
+        if (!is_dir($destFolder)) {
+            throw new Exception('El directorio de destino no existe.');
+        }
+
+        $copied = 0;
+        $errors = [];
+
+        foreach ($items as $itemRel) {
+            $itemRel = trim($itemRel);
+            if ($itemRel === '') continue;
+
+            try {
+                $srcFull = self::resolvePath($srcSource, $itemRel);
+                $itemName = basename($srcFull);
+                $targetFull = $destFolder . '/' . $itemName;
+
+                // If copying into same folder, create a copy name
+                if ($srcFull === $targetFull) {
+                    $info = pathinfo($itemName);
+                    $ext = isset($info['extension']) ? ('.' . $info['extension']) : '';
+                    $targetFull = $destFolder . '/' . $info['filename'] . ' (copia)' . $ext;
+                }
+
+                if (self::copyRecursive($srcFull, $targetFull)) {
+                    $copied++;
+                } else {
+                    $errors[] = "No se pudo copiar {$itemName}";
+                }
+            } catch (Exception $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        return [
+            'success' => $copied > 0 || empty($errors),
+            'copied'  => $copied,
+            'errors'  => $errors,
+            'message' => "Se copiaron {$copied} elemento(s) con éxito."
+        ];
+    }
+
+    /**
+     * Move multiple items from source to destination directory
+     */
+    public static function moveBatch(string $srcSource, array $items, string $destSource, string $destRelativePath): array
+    {
+        $destFolder = self::resolvePath($destSource, $destRelativePath);
+        if (!is_dir($destFolder)) {
+            throw new Exception('El directorio de destino no existe.');
+        }
+
+        $moved = 0;
+        $errors = [];
+
+        foreach ($items as $itemRel) {
+            $itemRel = trim($itemRel);
+            if ($itemRel === '') continue;
+
+            try {
+                $srcFull = self::resolvePath($srcSource, $itemRel);
+                $itemName = basename($srcFull);
+                $targetFull = $destFolder . '/' . $itemName;
+
+                if ($srcFull === $targetFull) {
+                    continue; // Same location, nothing to move
+                }
+
+                // Try fast rename
+                if (@rename($srcFull, $targetFull)) {
+                    $moved++;
+                } else {
+                    // Fallback across different filesystems / mountpoints
+                    if (self::copyRecursive($srcFull, $targetFull)) {
+                        if (is_dir($srcFull)) {
+                            self::deleteDirectoryRecursive($srcFull);
+                        } else {
+                            @unlink($srcFull);
+                        }
+                        $moved++;
+                    } else {
+                        $errors[] = "No se pudo mover {$itemName}";
+                    }
+                }
+            } catch (Exception $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        return [
+            'success' => $moved > 0 || empty($errors),
+            'moved'   => $moved,
+            'errors'  => $errors,
+            'message' => "Se movieron {$moved} elemento(s) con éxito."
+        ];
+    }
+
+    /**
+     * Delete multiple items
+     */
+    public static function deleteBatch(string $source, array $items): array
+    {
+        $deleted = 0;
+        $errors = [];
+
+        foreach ($items as $itemRel) {
+            $itemRel = trim($itemRel);
+            if ($itemRel === '') continue;
+
+            try {
+                self::deleteItem($source, $itemRel);
+                $deleted++;
+            } catch (Exception $e) {
+                $errors[] = $e->getMessage();
+            }
+        }
+
+        return [
+            'success' => $deleted > 0 || empty($errors),
+            'deleted' => $deleted,
+            'errors'  => $errors,
+            'message' => "Se eliminaron {$deleted} elemento(s)."
+        ];
+    }
+
+    /**
+     * Save text/code file content (for F4 Edit)
+     */
+    public static function saveFileContent(string $source, string $relativePath, string $content): array
+    {
+        $fullPath = self::resolvePath($source, $relativePath);
+        if (!is_file($fullPath)) {
+            throw new Exception('El archivo no existe.');
+        }
+
+        if (@file_put_contents($fullPath, $content) === false) {
+            throw new Exception('No se pudo guardar el archivo. Verifique los permisos de escritura.');
+        }
+
+        return [
+            'success'  => true,
+            'message'  => 'Archivo guardado correctamente',
+            'size'     => filesize($fullPath),
+            'size_h'   => self::formatBytes(filesize($fullPath)),
+            'modified' => date('d/m/Y H:i:s')
+        ];
+    }
+
+    /**
+     * Read content for full editing (for F4 Edit)
+     */
+    public static function readFileForEdit(string $source, string $relativePath): array
+    {
+        $fullPath = self::resolvePath($source, $relativePath);
+        if (!is_file($fullPath)) {
+            throw new Exception('El archivo a editar no existe.');
+        }
+
+        $size = filesize($fullPath);
+        if ($size > 5242880) { // 5MB limit for browser text editor
+            throw new Exception('El archivo es demasiado grande para editarse en el navegador (> 5MB).');
+        }
+
+        $content = file_get_contents($fullPath);
+        if ($content === false) {
+            throw new Exception('No se pudo leer el archivo.');
+        }
+
+        return [
+            'success'  => true,
+            'filename' => basename($fullPath),
+            'path'     => $relativePath,
+            'content'  => $content,
+            'size'     => $size,
+            'size_h'   => self::formatBytes($size),
+            'ext'      => strtolower(pathinfo($fullPath, PATHINFO_EXTENSION))
+        ];
+    }
+
+    /**
      * Read content for text/code preview
      */
     public static function readFilePreview(string $source, string $relativePath, int $maxBytes = 524288): array
