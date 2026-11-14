@@ -367,8 +367,8 @@ const app = {
                 '<input type="checkbox" class="chk-item" data-panel="' + panelKey + '" data-idx="' + rawIndex + '" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation()">';
 
             const nameHtml = item.is_dir ?
-                '<strong class="text-dark"><i class="' + item.icon + ' mr-1"></i> ' + escapeHtml(item.name) + '</strong>' :
-                '<span class="text-dark"><i class="' + item.icon + ' mr-1"></i> ' + escapeHtml(item.name) + '</span>';
+                (item.is_up ? '<strong class="text-primary">' + escapeHtml(item.name) + '</strong>' : '<strong class="text-dark">' + escapeHtml(item.name) + '</strong>') :
+                '<span class="text-dark">' + escapeHtml(item.name) + '</span>';
 
             const row = $('<tr class="' + rowClass + '" data-display-idx="' + displayIndex + '" data-raw-idx="' + rawIndex + '">' +
                 '<td class="text-center">' + chkHtml + '</td>' +
