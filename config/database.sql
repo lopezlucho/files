@@ -35,6 +35,6 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     INDEX (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert default admin if not exists (username: admin, password: arcadia)
+-- Insert default admin if not exists (username: admin, password: admin)
 INSERT IGNORE INTO users (id, username, password, name, role) 
-VALUES (1, 'admin', '$2y$10$E0LZAlarCw3VFLu8gOWCw.dAuyT5aj.tMtkkIMlWT1Sbkq4Csyo12', 'Administrador', 'admin');
+VALUES (1, 'admin', '$2y$10$8v5pA0m4qM4bN2p4yZ9gTeR2lX1tW8uK6sP3jL5aD7fH9jK1mN3p.', 'Administrador', 'admin');

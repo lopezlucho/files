@@ -94,5 +94,5 @@ files/
 
 - **URL:** `http://localhost/files/`
 - **Usuario:** `admin`
-- **Contraseña:** `arcadia`
+- **Contraseña:** `admin`
 *(Puedes cambiar tu contraseña en cualquier momento desde el menú superior derecho).*
