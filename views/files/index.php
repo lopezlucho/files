@@ -207,9 +207,6 @@ $isUsbMounted = UsbManager::isMounted();
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionRename()">
                 <span class="fn-badge">F2</span> Renombrar
             </a>
-            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.switchActivePanel()">
-                <span class="fn-badge">Tab</span> Alternar
-            </a>
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionView()">
                 <span class="fn-badge">F3</span> Ver
             </a>
@@ -236,6 +233,9 @@ $isUsbMounted = UsbManager::isMounted();
             </a>
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.downloadCurrentFolder(app.activePanel)">
                 <span class="fn-badge">F9</span> Bajar ZIP
+            </a>
+            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.switchActivePanel()">
+                <span class="fn-badge">Tab</span> Alternar
             </a>
         </div>
 
