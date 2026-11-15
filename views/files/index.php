@@ -92,14 +92,23 @@ $isUsbMounted = UsbManager::isMounted();
                     </div>
 
                     <!-- Panel Footer -->
-                    <div class="panel-footer d-flex justify-content-between align-items-center">
+                    <div class="panel-footer d-flex justify-content-between align-items-center flex-wrap">
                         <span class="text-muted small" id="summary-left">0 elementos | 0 seleccionados</span>
-                        <div>
-                            <button type="button" class="btn btn-xs btn-outline-primary mr-1" onclick="app.openUploadModal('left')">
+                        <div class="mt-1 mt-sm-0">
+                            <button type="button" class="btn btn-xs btn-outline-primary mr-1" onclick="app.openUploadModal('left')" title="Subir archivos a esta carpeta">
                                 <i class="fas fa-upload mr-1"></i> Subir
                             </button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="app.promptNewFolder('left')">
+                            <button type="button" class="btn btn-xs btn-outline-secondary mr-1" onclick="app.promptNewFolder('left')" title="Crear nueva carpeta [F7]">
                                 <i class="fas fa-folder-plus mr-1"></i> Carpeta
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-success mr-1" onclick="app.downloadCurrentFolder('left')" title="Descargar toda esta carpeta como archivo .ZIP">
+                                <i class="fas fa-download mr-1"></i> Descargar Carpeta (.ZIP)
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-warning mr-1" onclick="app.actionCompressZip('left')" title="Comprimir elementos seleccionados en .ZIP">
+                                <i class="fas fa-file-archive mr-1"></i> Comprimir
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-info" onclick="app.actionExtractZip('left')" title="Descomprimir archivo .ZIP seleccionado">
+                                <i class="fas fa-box-open mr-1"></i> Descomprimir
                             </button>
                         </div>
                     </div>
@@ -165,14 +174,23 @@ $isUsbMounted = UsbManager::isMounted();
                     </div>
 
                     <!-- Panel Footer -->
-                    <div class="panel-footer d-flex justify-content-between align-items-center">
+                    <div class="panel-footer d-flex justify-content-between align-items-center flex-wrap">
                         <span class="text-muted small" id="summary-right">0 elementos | 0 seleccionados</span>
-                        <div>
-                            <button type="button" class="btn btn-xs btn-outline-primary mr-1" onclick="app.openUploadModal('right')">
+                        <div class="mt-1 mt-sm-0">
+                            <button type="button" class="btn btn-xs btn-outline-primary mr-1" onclick="app.openUploadModal('right')" title="Subir archivos a esta carpeta">
                                 <i class="fas fa-upload mr-1"></i> Subir
                             </button>
-                            <button type="button" class="btn btn-xs btn-outline-secondary" onclick="app.promptNewFolder('right')">
+                            <button type="button" class="btn btn-xs btn-outline-secondary mr-1" onclick="app.promptNewFolder('right')" title="Crear nueva carpeta [F7]">
                                 <i class="fas fa-folder-plus mr-1"></i> Carpeta
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-success mr-1" onclick="app.downloadCurrentFolder('right')" title="Descargar toda esta carpeta como archivo .ZIP">
+                                <i class="fas fa-download mr-1"></i> Descargar Carpeta (.ZIP)
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-warning mr-1" onclick="app.actionCompressZip('right')" title="Comprimir elementos seleccionados en .ZIP">
+                                <i class="fas fa-file-archive mr-1"></i> Comprimir
+                            </button>
+                            <button type="button" class="btn btn-xs btn-outline-info" onclick="app.actionExtractZip('right')" title="Descomprimir archivo .ZIP seleccionado">
+                                <i class="fas fa-box-open mr-1"></i> Descomprimir
                             </button>
                         </div>
                     </div>
@@ -182,7 +200,7 @@ $isUsbMounted = UsbManager::isMounted();
         </div>
 
         <!-- Classic Midnight Commander Bottom Function Keys Bar -->
-        <div class="commander-fn-bar shadow">
+        <div class="commander-fn-bar shadow flex-wrap">
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.showHelp()">
                 <span class="fn-badge">F1</span> Ayuda
             </a>
@@ -207,8 +225,14 @@ $isUsbMounted = UsbManager::isMounted();
             <a href="javascript:void(0)" class="commander-fn-btn text-danger" onclick="app.actionDeleteBatch()">
                 <span class="fn-badge">F8</span> Borrar
             </a>
-            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionToggleSource()">
-                <span class="fn-badge">F9</span> Origen
+            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionCompressZip()">
+                <span class="fn-badge">Alt+F5</span> Comprimir
+            </a>
+            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionExtractZip()">
+                <span class="fn-badge">Alt+F6</span> Extraer
+            </a>
+            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.downloadCurrentFolder(app.activePanel)">
+                <span class="fn-badge">F9</span> Bajar ZIP
             </a>
         </div>
 

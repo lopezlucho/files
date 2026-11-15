@@ -378,15 +378,18 @@ const app = {
                 '<td class="text-right small text-muted">' + escapeHtml(item.modified_h || '') + '</td>' +
                 '</tr>');
 
-            // Click row to focus and activate panel
-            row.on('click', function () {
+            // Click row to focus and activate panel (WITHOUT destroying DOM so dblclick works)
+            row.on('click', function (e) {
+                if ($(e.target).is('input[type="checkbox"]')) return;
                 self.setActivePanel(panelKey);
                 p.focusedIndex = displayIndex;
-                self.renderPanelTable(panelKey);
+                $tbody.find('tr').removeClass('row-focused');
+                row.addClass('row-focused');
             });
 
             // Double click to open folder or preview file
-            row.on('dblclick', function () {
+            row.on('dblclick', function (e) {
+                e.preventDefault();
                 self.activateItem(panelKey, item);
             });
 
@@ -561,11 +564,19 @@ const app = {
                 break;
             case 'F5':
                 e.preventDefault();
-                this.actionCopyBatch();
+                if (e.altKey) {
+                    this.actionCompressZip(this.activePanel);
+                } else {
+                    this.actionCopyBatch();
+                }
                 break;
             case 'F6':
                 e.preventDefault();
-                this.actionMoveBatch();
+                if (e.altKey) {
+                    this.actionExtractZip(this.activePanel);
+                } else {
+                    this.actionMoveBatch();
+                }
                 break;
             case 'F7':
                 e.preventDefault();
@@ -578,7 +589,21 @@ const app = {
                 break;
             case 'F9':
                 e.preventDefault();
-                this.actionToggleSource();
+                this.downloadCurrentFolder(this.activePanel);
+                break;
+            case 'c':
+            case 'C':
+                if (e.altKey) {
+                    e.preventDefault();
+                    this.actionCompressZip(this.activePanel);
+                }
+                break;
+            case 'x':
+            case 'X':
+                if (e.altKey) {
+                    e.preventDefault();
+                    this.actionExtractZip(this.activePanel);
+                }
                 break;
         }
     },
@@ -624,7 +649,8 @@ const app = {
         if (item.is_dir) {
             this.loadPanelPath(panelKey, item.path);
         } else {
-            this.actionView();
+            const panel = this.panels[panelKey];
+            this.openPreviewModal(panel.source, item.path, item.name, item.preview_type, item.size_h);
         }
     },
 
@@ -952,6 +978,228 @@ const app = {
     },
 
     /* =========================================================================
+     * ZIP ARCHIVE OPERATIONS (COMPRESS / EXTRACT / DOWNLOAD FOLDER)
+     * ========================================================================= */
+    downloadCurrentFolder: function (panelKey) {
+        panelKey = panelKey || this.activePanel;
+        const panel = this.panels[panelKey];
+        const folderDesc = panel.source.toUpperCase() + ':/' + (panel.path || '(raíz)');
+
+        Swal.fire({
+            title: '¿Descargar carpeta como .ZIP?',
+            html: '<p>Se empaquetará y descargará todo el contenido de:<br><code>' + escapeHtml(folderDesc) + '</code></p>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            confirmButtonText: '<i class="fas fa-file-archive mr-1"></i> Descargar .ZIP',
+            cancelButtonText: 'Cancelar'
+        }).then(function (res) {
+            if (res.isConfirmed) {
+                const downloadUrl = '/files/api/files.php?action=zip&source=' + encodeURIComponent(panel.source) + '&path=' + encodeURIComponent(panel.path);
+                window.location.href = downloadUrl;
+            }
+        });
+    },
+
+    actionCompressZip: function (panelKey) {
+        const self = this;
+        panelKey = panelKey || self.activePanel;
+        const panel = self.panels[panelKey];
+        const selected = self.getSelectedItems(panelKey);
+
+        if (selected.length === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Nada para comprimir',
+                text: 'Selecciona con la Barra Espaciadora o enfoca los archivos/carpetas que deseas comprimir en .ZIP.'
+            });
+            return;
+        }
+
+        const count = selected.length;
+        const itemNames = selected.map(function (it) { return it.name; }).slice(0, 5).join(', ') + (count > 5 ? '...' : '');
+
+        let defaultZipName = '';
+        if (count === 1) {
+            defaultZipName = selected[0].name.replace(/\.[^/.]+$/, '') + '.zip';
+        } else {
+            const now = new Date();
+            const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+            defaultZipName = 'comprimido_' + dateStr + '.zip';
+        }
+
+        Swal.fire({
+            title: 'Comprimir en .ZIP [Alt+F5]',
+            html: '<p class="mb-2"><b>Elementos seleccionados (' + count + '):</b><br><small class="text-muted">' + escapeHtml(itemNames) + '</small></p>' +
+                  '<p class="mb-1 text-left"><b>Nombre del archivo .ZIP:</b></p>',
+            input: 'text',
+            inputValue: defaultZipName,
+            inputPlaceholder: 'ejemplo.zip',
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            confirmButtonText: '<i class="fas fa-file-archive mr-1"></i> Comprimir ahora',
+            cancelButtonText: 'Cancelar',
+            inputValidator: function (val) {
+                if (!val || !val.trim()) {
+                    return 'Debes ingresar un nombre para el archivo ZIP.';
+                }
+            }
+        }).then(function (res) {
+            if (res.isConfirmed && res.value) {
+                Swal.fire({
+                    title: 'Creando archivo ZIP...',
+                    html: 'Empaquetando ' + count + ' elemento(s)...',
+                    allowOutsideClick: false,
+                    didOpen: function () { Swal.showLoading(); }
+                });
+
+                const paths = selected.map(function (it) { return it.path; });
+
+                $.ajax({
+                    url: '/files/api/files.php?action=create_zip',
+                    type: 'POST',
+                    data: {
+                        source: panel.source,
+                        current_path: panel.path,
+                        zip_name: res.value.trim(),
+                        items: paths
+                    },
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Comprimido con éxito!',
+                                text: resp.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                            self.loadPanelPath(panelKey, panel.path);
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error al comprimir', text: resp.error || 'Ocurrió un error inesperado.' });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error de comunicación con el servidor al crear el ZIP.' });
+                    }
+                });
+            }
+        });
+    },
+
+    actionExtractZip: function (panelKey, specificZipPath) {
+        const self = this;
+        panelKey = panelKey || self.activePanel;
+        const panel = self.panels[panelKey];
+        const dstPanelKey = (panelKey === 'left') ? 'right' : 'left';
+        const dstPanel = self.panels[dstPanelKey];
+
+        let targetZipPath = specificZipPath || null;
+        let targetZipName = '';
+
+        if (!targetZipPath) {
+            const selected = self.getSelectedItems(panelKey);
+            for (let i = 0; i < selected.length; i++) {
+                if (selected[i].name.toLowerCase().endsWith('.zip')) {
+                    targetZipPath = selected[i].path;
+                    targetZipName = selected[i].name;
+                    break;
+                }
+            }
+
+            if (!targetZipPath) {
+                const focused = self.getFocusedItem(panelKey);
+                if (focused && focused.name.toLowerCase().endsWith('.zip')) {
+                    targetZipPath = focused.path;
+                    targetZipName = focused.name;
+                }
+            }
+        } else {
+            targetZipName = targetZipPath.split('/').pop();
+        }
+
+        if (!targetZipPath) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Selecciona un archivo .ZIP',
+                text: 'Por favor, enfoca o selecciona un archivo con extensión .ZIP para poder descomprimirlo.'
+            });
+            return;
+        }
+
+        const currentDesc = panel.source.toUpperCase() + ':/' + (panel.path || '(raíz actual)');
+        const oppositeDesc = dstPanel.source.toUpperCase() + ':/' + (dstPanel.path || '(raíz opuesta)');
+        const subfolderName = targetZipName.replace(/\.zip$/i, '');
+
+        Swal.fire({
+            title: 'Descomprimir .ZIP [Alt+F6]',
+            html: '<p class="mb-2"><b>Archivo a descomprimir:</b> <code>' + escapeHtml(targetZipName) + '</code></p>' +
+                  '<p class="mb-2 text-left"><b>¿Dónde deseas extraer el contenido?</b></p>',
+            input: 'radio',
+            inputOptions: {
+                'current': 'En este panel (' + escapeHtml(currentDesc) + ')',
+                'subfolder': 'En una nueva carpeta "' + escapeHtml(subfolderName) + '"',
+                'opposite': 'En el panel opuesto (' + escapeHtml(oppositeDesc) + ')'
+            },
+            inputValue: 'current',
+            showCancelButton: true,
+            confirmButtonColor: '#17a2b8',
+            confirmButtonText: '<i class="fas fa-box-open mr-1"></i> Extraer aquí',
+            cancelButtonText: 'Cancelar'
+        }).then(function (res) {
+            if (res.isConfirmed && res.value) {
+                let targetDestSource = panel.source;
+                let targetDestPath = panel.path;
+
+                if (res.value === 'opposite') {
+                    targetDestSource = dstPanel.source;
+                    targetDestPath = dstPanel.path;
+                } else if (res.value === 'subfolder') {
+                    targetDestSource = panel.source;
+                    targetDestPath = (panel.path ? panel.path + '/' : '') + subfolderName;
+                }
+
+                Swal.fire({
+                    title: 'Descomprimiendo...',
+                    text: 'Extrayendo contenido de ' + targetZipName + '...',
+                    allowOutsideClick: false,
+                    didOpen: function () { Swal.showLoading(); }
+                });
+
+                $.ajax({
+                    url: '/files/api/files.php?action=extract_zip',
+                    type: 'POST',
+                    data: {
+                        source: panel.source,
+                        zip_path: targetZipPath,
+                        dest_source: targetDestSource,
+                        dest_path: targetDestPath
+                    },
+                    dataType: 'json',
+                    success: function (resp) {
+                        if (resp.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Extracción completada!',
+                                text: resp.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                            self.loadPanelPath('left', self.panels.left.path);
+                            self.loadPanelPath('right', self.panels.right.path);
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'Error al extraer', text: resp.error || 'Ocurrió un error al extraer el archivo ZIP.' });
+                        }
+                    },
+                    error: function () {
+                        Swal.fire({ icon: 'error', title: 'Error', text: 'Error de comunicación con el servidor al extraer el archivo.' });
+                    }
+                });
+            }
+        });
+    },
+
+    /* =========================================================================
      * F4 EDITOR MODAL & SAVE
      * ========================================================================= */
     openEditorModal: function (source, path, filename) {
@@ -1072,6 +1320,43 @@ const app = {
                 }
             }).fail(function () {
                 $container.html('<div class="alert alert-danger">Error al cargar texto.</div>');
+            });
+        } else if (type === 'zip') {
+            $.getJSON(previewUrl, function (res) {
+                if (res.success) {
+                    let filesTable = '<div class="table-responsive text-left border rounded" style="max-height: 52vh; overflow-y: auto;">' +
+                        '<table class="table table-sm table-striped table-hover mb-0">' +
+                        '<thead class="thead-light"><tr><th>Archivo / Carpeta</th><th class="text-right">Tamaño</th><th class="text-right">Comprimido</th><th class="text-right">Fecha</th></tr></thead><tbody>';
+
+                    if (res.files && res.files.length > 0) {
+                        res.files.forEach(function (f) {
+                            const icon = f.is_dir ? '<i class="fas fa-folder text-warning mr-1"></i>' : '<i class="fas fa-file text-secondary mr-1"></i>';
+                            filesTable += '<tr>' +
+                                '<td>' + icon + '<code>' + escapeHtml(f.name) + '</code></td>' +
+                                '<td class="text-right small">' + escapeHtml(f.size_h) + '</td>' +
+                                '<td class="text-right small text-muted">' + escapeHtml(f.compressed_size_h) + '</td>' +
+                                '<td class="text-right small text-muted">' + escapeHtml(f.modified) + '</td>' +
+                                '</tr>';
+                        });
+                    } else {
+                        filesTable += '<tr><td colspan="4" class="text-center text-muted py-3">El archivo ZIP está vacío.</td></tr>';
+                    }
+                    filesTable += '</tbody></table></div>';
+
+                    const actionButtons = '<div class="mt-3 text-right">' +
+                        '<button type="button" class="btn btn-info btn-sm mr-2" onclick="$(\'#modalPreview\').modal(\'hide\'); app.actionExtractZip(app.activePanel, \'' + escapeHtml(path) + '\')">' +
+                        '<i class="fas fa-box-open mr-1"></i> Descomprimir este ZIP' +
+                        '</button>' +
+                        '</div>';
+
+                    $container.html('<div class="alert alert-info py-2 text-left mb-2 d-flex justify-content-between align-items-center">' +
+                        '<div><i class="fas fa-archive mr-2"></i><b>Contenido del archivo ZIP</b> (' + res.total_files + ' elementos)</div>' +
+                        '</div>' + filesTable + actionButtons);
+                } else {
+                    $container.html('<div class="alert alert-danger">Error: ' + escapeHtml(res.error) + '</div>');
+                }
+            }).fail(function () {
+                $container.html('<div class="alert alert-danger">Error al cargar contenido del archivo ZIP.</div>');
             });
         } else {
             $container.html('<div class="py-4 text-muted"><i class="fas fa-file fa-4x mb-2"></i><p>Formato sin visor integrado. Usa el botón Descargar.</p></div>');

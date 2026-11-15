@@ -103,6 +103,14 @@ try {
                 exit;
             }
 
+            if ($previewType === 'zip') {
+                header('Content-Type: application/json');
+                $zipData = FileManager::listZipContents($source, $path);
+                $zipData['type'] = 'zip';
+                echo json_encode($zipData);
+                exit;
+            }
+
             // Binary inline preview (images, PDF, audio, video)
             while (ob_get_level()) {
                 ob_end_clean();
@@ -196,6 +204,52 @@ try {
             $result = FileManager::saveFileContent($source, $path, $content);
             $user = Auth::user();
             Auth::logActivity((int)$user['id'], 'SAVE_FILE', "Editado archivo '{$path}' en {$source}");
+            echo json_encode($result);
+            break;
+
+        case 'create_zip':
+            header('Content-Type: application/json');
+            $currentPath = $_POST['current_path'] ?? '';
+            $zipName = $_POST['zip_name'] ?? '';
+            $rawItems = $_POST['items'] ?? [];
+            $items = is_array($rawItems) ? $rawItems : json_decode($rawItems, true);
+
+            if (empty($items) || !is_array($items)) {
+                echo json_encode(['success' => false, 'error' => 'No se seleccionaron elementos para comprimir']);
+                exit;
+            }
+
+            $result = FileManager::createZip($source, $items, $currentPath, $zipName);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'CREATE_ZIP', "Creado archivo ZIP '{$result['filename']}' en {$source}:/{$currentPath}");
+            echo json_encode($result);
+            break;
+
+        case 'extract_zip':
+            header('Content-Type: application/json');
+            $zipPath = $_POST['zip_path'] ?? '';
+            $destSource = $_POST['dest_source'] ?? $source;
+            $destPath = $_POST['dest_path'] ?? '';
+
+            if (empty($zipPath)) {
+                echo json_encode(['success' => false, 'error' => 'No se especificó el archivo ZIP a descomprimir']);
+                exit;
+            }
+
+            $result = FileManager::extractZip($source, $zipPath, $destSource, $destPath);
+            $user = Auth::user();
+            Auth::logActivity((int)$user['id'], 'EXTRACT_ZIP', "Extraído ZIP '{$zipPath}' en {$destSource}:/{$destPath}");
+            echo json_encode($result);
+            break;
+
+        case 'list_zip':
+            header('Content-Type: application/json');
+            $zipPath = $_GET['zip_path'] ?? $_POST['zip_path'] ?? '';
+            if (empty($zipPath)) {
+                echo json_encode(['success' => false, 'error' => 'No se especificó el archivo ZIP']);
+                exit;
+            }
+            $result = FileManager::listZipContents($source, $zipPath);
             echo json_encode($result);
             break;
 

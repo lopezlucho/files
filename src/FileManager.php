@@ -410,6 +410,184 @@ class FileManager
     }
 
     /**
+     * Compress selected items into a new ZIP archive
+     */
+    public static function createZip(string $source, array $items, string $currentPath, string $zipName): array
+    {
+        $currentDir = self::resolvePath($source, $currentPath);
+        if (!is_dir($currentDir)) {
+            throw new Exception('El directorio actual no existe.');
+        }
+
+        $zipName = trim($zipName);
+        if ($zipName === '') {
+            $zipName = 'archivo_' . date('Ymd_His');
+        }
+        if (!preg_match('/\.zip$/i', $zipName)) {
+            $zipName .= '.zip';
+        }
+
+        $zipFullPath = $currentDir . '/' . self::sanitizeFilename($zipName);
+        if (file_exists($zipFullPath)) {
+            throw new Exception("Ya existe un archivo con el nombre '{$zipName}'.");
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipFullPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new Exception('No se pudo inicializar el archivo ZIP.');
+        }
+
+        $addedCount = 0;
+        foreach ($items as $relPath) {
+            $relPath = trim($relPath);
+            if ($relPath === '') continue;
+
+            $fullItemPath = self::resolvePath($source, $relPath);
+            if (!file_exists($fullItemPath)) continue;
+
+            $baseName = basename($fullItemPath);
+            if (is_dir($fullItemPath)) {
+                $zip->addEmptyDir($baseName);
+                $files = new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($fullItemPath, RecursiveDirectoryIterator::SKIP_DOTS),
+                    RecursiveIteratorIterator::LEAVES_ONLY
+                );
+                $parentLen = strlen($fullItemPath);
+                foreach ($files as $name => $file) {
+                    if (!$file->isDir()) {
+                        $filePath = $file->getRealPath();
+                        $subPath = $baseName . '/' . substr($filePath, $parentLen + 1);
+                        $zip->addFile($filePath, $subPath);
+                        $addedCount++;
+                    }
+                }
+            } else {
+                $zip->addFile($fullItemPath, $baseName);
+                $addedCount++;
+            }
+        }
+
+        $zip->close();
+        @chmod($zipFullPath, 0664);
+
+        return [
+            'success'   => true,
+            'message'   => "Archivo ZIP creado con éxito ({$addedCount} archivos incluidos).",
+            'filename'  => basename($zipFullPath),
+            'size'      => filesize($zipFullPath),
+            'size_h'    => self::formatBytes(filesize($zipFullPath)),
+            'file_count'=> $addedCount
+        ];
+    }
+
+    /**
+     * Extract a ZIP archive to a destination directory
+     */
+    public static function extractZip(string $source, string $relativeZipPath, string $destSource, string $destRelativePath): array
+    {
+        $zipFullPath = self::resolvePath($source, $relativeZipPath);
+        if (!is_file($zipFullPath)) {
+            throw new Exception('El archivo ZIP no existe.');
+        }
+
+        $destDir = self::resolvePath($destSource, $destRelativePath);
+        if (!is_dir($destDir)) {
+            if (!@mkdir($destDir, 0775, true)) {
+                throw new Exception('El directorio de destino no existe y no pudo ser creado.');
+            }
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipFullPath) !== true) {
+            throw new Exception('No se pudo abrir el archivo comprimido. Es posible que esté dañado.');
+        }
+
+        $numFiles = $zip->numFiles;
+        if (!$zip->extractTo($destDir)) {
+            $zip->close();
+            throw new Exception('Error al extraer el archivo ZIP. Verifique los permisos de escritura.');
+        }
+
+        $zip->close();
+
+        // Fix permissions in destination
+        $extractedItems = array_diff(scandir($destDir), ['.', '..']);
+        foreach ($extractedItems as $item) {
+            $p = $destDir . '/' . $item;
+            if (is_dir($p)) {
+                @chmod($p, 0775);
+            } else {
+                @chmod($p, 0664);
+            }
+        }
+
+        return [
+            'success'   => true,
+            'message'   => "Se extrajeron {$numFiles} elemento(s) en {$destSource}:/{$destRelativePath}.",
+            'num_files' => $numFiles,
+            'dest'      => $destRelativePath
+        ];
+    }
+
+    /**
+     * List contents of a ZIP file without extracting (for F3 preview)
+     */
+    public static function listZipContents(string $source, string $relativeZipPath): array
+    {
+        $zipFullPath = self::resolvePath($source, $relativeZipPath);
+        if (!is_file($zipFullPath)) {
+            throw new Exception('El archivo ZIP no existe.');
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipFullPath, ZipArchive::RDONLY) !== true) {
+            throw new Exception('No se pudo abrir el archivo ZIP para lectura.');
+        }
+
+        $entries = [];
+        $totalOriginal = 0;
+        $totalCompressed = 0;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            $name = $stat['name'];
+            $isDir = substr($name, -1) === '/';
+            $size = $stat['size'];
+            $compSize = $stat['comp_size'];
+            $mtime = $stat['mtime'];
+
+            $totalOriginal += $size;
+            $totalCompressed += $compSize;
+
+            $entries[] = [
+                'name'        => $name,
+                'is_dir'      => $isDir,
+                'size'        => $size,
+                'size_h'      => $isDir ? '<DIR>' : self::formatBytes($size),
+                'comp_size'   => $compSize,
+                'comp_size_h' => $isDir ? '-' : self::formatBytes($compSize),
+                'mtime'       => date('d/m/Y H:i', $mtime),
+                'ratio'       => ($size > 0) ? round((1 - ($compSize / $size)) * 100, 1) . '%' : '0%'
+            ];
+        }
+
+        $zip->close();
+
+        return [
+            'success'          => true,
+            'filename'         => basename($zipFullPath),
+            'path'             => $relativeZipPath,
+            'source'           => $source,
+            'num_files'        => count($entries),
+            'total_size'       => $totalOriginal,
+            'total_size_h'     => self::formatBytes($totalOriginal),
+            'compressed_size'  => $totalCompressed,
+            'compressed_size_h'=> self::formatBytes($totalCompressed),
+            'entries'          => $entries
+        ];
+    }
+
+    /**
      * Get disk usage statistics for source
      */
     public static function getDiskStats(string $source): array
@@ -728,6 +906,8 @@ class FileManager
             'mp3', 'ogg', 'wav', 'aac', 'm4a',
             // Video
             'mp4', 'webm', 'ogg',
+            // Archives
+            'zip',
             // Text / Code
             'txt', 'md', 'json', 'js', 'css', 'html', 'htm', 'php', 'sql', 'xml', 'csv', 'py', 'sh', 'log', 'ini', 'conf', 'yaml', 'yml'
         ];
@@ -742,6 +922,9 @@ class FileManager
         }
         if ($ext === 'pdf') {
             return 'pdf';
+        }
+        if ($ext === 'zip') {
+            return 'zip';
         }
         if (in_array($ext, ['mp3', 'ogg', 'wav', 'aac', 'm4a'])) {
             return 'audio';

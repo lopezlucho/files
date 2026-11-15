@@ -291,6 +291,10 @@
                         </thead>
                         <tbody>
                             <tr>
+                                <td><kbd>Doble Clic</kbd></td>
+                                <td>Entrar a la carpeta o previsualizar el archivo (imágenes, PDF, ZIP, texto, etc.).</td>
+                            </tr>
+                            <tr>
                                 <td><kbd>Tab</kbd></td>
                                 <td>Alternar foco entre el <b>Panel Izquierdo</b> y el <b>Panel Derecho</b>.</td>
                             </tr>
@@ -320,7 +324,7 @@
                             </tr>
                             <tr>
                                 <td><kbd>F3</kbd></td>
-                                <td><b>Ver:</b> Previsualizar el archivo enfocado (imágenes, PDF, video, audio o texto).</td>
+                                <td><b>Ver:</b> Previsualizar el archivo enfocado (imágenes, PDF, video, audio, texto o inspeccionar contenido de un <b>.ZIP</b> sin descomprimirlo).</td>
                             </tr>
                             <tr>
                                 <td><kbd>F4</kbd></td>
@@ -343,8 +347,16 @@
                                 <td><b>Borrar:</b> Eliminar masivamente los elementos seleccionados del panel activo.</td>
                             </tr>
                             <tr>
+                                <td><kbd>Alt+F5</kbd> o <kbd>Alt+C</kbd></td>
+                                <td><b>Comprimir:</b> Empaquetar archivos/carpetas seleccionados en un nuevo archivo <b>.ZIP</b>.</td>
+                            </tr>
+                            <tr>
+                                <td><kbd>Alt+F6</kbd> o <kbd>Alt+X</kbd></td>
+                                <td><b>Descomprimir:</b> Extraer archivo <b>.ZIP</b> (en panel actual, subcarpeta o panel opuesto).</td>
+                            </tr>
+                            <tr>
                                 <td><kbd>F9</kbd></td>
-                                <td>Alternar origen de almacenamiento (<b>Local</b> ↔ <b>USB</b>) en el panel activo.</td>
+                                <td><b>Bajar ZIP:</b> Descargar toda la carpeta actual empaquetada como archivo <b>.ZIP</b>.</td>
                             </tr>
                         </tbody>
                     </table>
