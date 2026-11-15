@@ -323,6 +323,10 @@
                                 <td>Abrir esta ventana de ayuda y atajos.</td>
                             </tr>
                             <tr>
+                                <td><kbd>F2</kbd></td>
+                                <td><b>Renombrar:</b> Cambiar el nombre del archivo o carpeta enfocado.</td>
+                            </tr>
+                            <tr>
                                 <td><kbd>F3</kbd></td>
                                 <td><b>Ver:</b> Previsualizar el archivo enfocado (imágenes, PDF, video, audio, texto o inspeccionar contenido de un <b>.ZIP</b> sin descomprimirlo).</td>
                             </tr>

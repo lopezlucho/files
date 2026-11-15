@@ -204,6 +204,9 @@ $isUsbMounted = UsbManager::isMounted();
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.showHelp()">
                 <span class="fn-badge">F1</span> Ayuda
             </a>
+            <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.actionRename()">
+                <span class="fn-badge">F2</span> Renombrar
+            </a>
             <a href="javascript:void(0)" class="commander-fn-btn" onclick="app.switchActivePanel()">
                 <span class="fn-badge">Tab</span> Alternar
             </a>

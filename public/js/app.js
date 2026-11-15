@@ -77,6 +77,45 @@ const app = {
             self.unmountUsb();
         });
 
+        // Rename Form submit
+        $('#formRename').on('submit', function (e) {
+            e.preventDefault();
+            const $btn = $('#btnSubmitRename');
+            const path    = $('#txtRenamePath').val();
+            const source  = $('#txtRenameSource').val();
+            const newName = $('#txtRenameNewName').val().trim();
+
+            if (!newName) return;
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Guardando...');
+
+            $.ajax({
+                url: '/files/api/files.php?action=rename',
+                type: 'POST',
+                data: { source: source, path: path, new_name: newName },
+                dataType: 'json',
+                success: function (res) {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Guardar Cambios');
+                    if (res.success) {
+                        $('#modalRename').modal('hide');
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Renombrado',
+                            text: res.message || 'Elemento renombrado con éxito.',
+                            timer: 1400,
+                            showConfirmButton: false
+                        });
+                        self.loadPanelPath(self.activePanel, self.panels[self.activePanel].path);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error al renombrar', text: res.error || 'No se pudo renombrar el elemento.' });
+                    }
+                },
+                error: function () {
+                    $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Guardar Cambios');
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Error al contactar con el servidor.' });
+                }
+            });
+        });
+
         // Change Password Form
         $('#formChangePassword').on('submit', function (e) {
             e.preventDefault();
@@ -554,6 +593,10 @@ const app = {
                 e.preventDefault();
                 this.showHelp();
                 break;
+            case 'F2':
+                e.preventDefault();
+                this.actionRename();
+                break;
             case 'F3':
                 e.preventDefault();
                 this.actionView();
@@ -686,6 +729,57 @@ const app = {
      * ========================================================================= */
     showHelp: function () {
         $('#modalShortcutsHelp').modal('show');
+    },
+
+    actionRename: function () {
+        const panelKey = this.activePanel;
+        const item = this.getFocusedItem(panelKey);
+        if (!item || item.is_up) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Selecciona un elemento',
+                text: 'Enfoca el archivo o carpeta que deseas renombrar y pulsa F2.'
+            });
+            return;
+        }
+        this.openRenameModal(panelKey, item);
+    },
+
+    openRenameModal: function (panelKey, item) {
+        const panel = this.panels[panelKey];
+        const typeLabel = item.is_dir ? 'carpeta' : 'archivo';
+
+        // Inject hidden source field if not already present
+        if (!$('#txtRenameSource').length) {
+            $('#formRename').prepend('<input type="hidden" id="txtRenameSource" name="source">');
+        }
+
+        // Set icon and title dynamically
+        const icon = item.is_dir ? 'fas fa-folder text-warning' : item.icon;
+        $('#modalRename .modal-title').html(
+            '<i class="fas fa-i-cursor text-info mr-2"></i> Renombrar ' + typeLabel + ': <span class="text-primary font-italic">' + escapeHtml(item.name) + '</span>'
+        );
+
+        $('#txtRenameSource').val(panel.source);
+        $('#txtRenamePath').val(item.path);
+        $('#txtRenameNewName').val(item.name);
+        $('#btnSubmitRename').html('<i class="fas fa-save mr-1"></i> Guardar Cambios');
+
+        $('#modalRename').modal('show');
+
+        // Auto-select filename without extension (like a real file manager)
+        setTimeout(function () {
+            const input = document.getElementById('txtRenameNewName');
+            if (!input) return;
+            input.focus();
+            const name = input.value;
+            const dotIdx = name.lastIndexOf('.');
+            if (!item.is_dir && dotIdx > 0) {
+                input.setSelectionRange(0, dotIdx);
+            } else {
+                input.select();
+            }
+        }, 300);
     },
 
     actionView: function () {
