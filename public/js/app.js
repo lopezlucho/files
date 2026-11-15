@@ -1324,22 +1324,27 @@ const app = {
         } else if (type === 'zip') {
             $.getJSON(previewUrl, function (res) {
                 if (res.success) {
+                    // Backend returns 'entries' array with fields: name, is_dir, size_h, comp_size_h, mtime, ratio
+                    var entries = res.entries || res.files || [];
+                    var totalFiles = res.num_files || res.total_files || entries.length;
+
                     let filesTable = '<div class="table-responsive text-left border rounded" style="max-height: 52vh; overflow-y: auto;">' +
                         '<table class="table table-sm table-striped table-hover mb-0">' +
-                        '<thead class="thead-light"><tr><th>Archivo / Carpeta</th><th class="text-right">Tamaño</th><th class="text-right">Comprimido</th><th class="text-right">Fecha</th></tr></thead><tbody>';
+                        '<thead class="thead-light"><tr><th>Archivo / Carpeta</th><th class="text-right">Tamaño</th><th class="text-right">Comprimido</th><th class="text-right">Ratio</th><th class="text-right">Fecha</th></tr></thead><tbody>';
 
-                    if (res.files && res.files.length > 0) {
-                        res.files.forEach(function (f) {
+                    if (entries.length > 0) {
+                        entries.forEach(function (f) {
                             const icon = f.is_dir ? '<i class="fas fa-folder text-warning mr-1"></i>' : '<i class="fas fa-file text-secondary mr-1"></i>';
                             filesTable += '<tr>' +
                                 '<td>' + icon + '<code>' + escapeHtml(f.name) + '</code></td>' +
-                                '<td class="text-right small">' + escapeHtml(f.size_h) + '</td>' +
-                                '<td class="text-right small text-muted">' + escapeHtml(f.compressed_size_h) + '</td>' +
-                                '<td class="text-right small text-muted">' + escapeHtml(f.modified) + '</td>' +
+                                '<td class="text-right small">' + escapeHtml(f.size_h || '-') + '</td>' +
+                                '<td class="text-right small text-muted">' + escapeHtml(f.comp_size_h || f.compressed_size_h || '-') + '</td>' +
+                                '<td class="text-right small text-muted">' + escapeHtml(f.ratio || '-') + '</td>' +
+                                '<td class="text-right small text-muted">' + escapeHtml(f.mtime || f.modified || '-') + '</td>' +
                                 '</tr>';
                         });
                     } else {
-                        filesTable += '<tr><td colspan="4" class="text-center text-muted py-3">El archivo ZIP está vacío.</td></tr>';
+                        filesTable += '<tr><td colspan="5" class="text-center text-muted py-3">El archivo ZIP está vacío.</td></tr>';
                     }
                     filesTable += '</tbody></table></div>';
 
@@ -1350,7 +1355,7 @@ const app = {
                         '</div>';
 
                     $container.html('<div class="alert alert-info py-2 text-left mb-2 d-flex justify-content-between align-items-center">' +
-                        '<div><i class="fas fa-archive mr-2"></i><b>Contenido del archivo ZIP</b> (' + res.total_files + ' elementos)</div>' +
+                        '<div><i class="fas fa-archive mr-2"></i><b>Contenido del archivo ZIP</b> — ' + totalFiles + ' elemento(s) | Total: ' + (res.total_size_h || '') + '</div>' +
                         '</div>' + filesTable + actionButtons);
                 } else {
                     $container.html('<div class="alert alert-danger">Error: ' + escapeHtml(res.error) + '</div>');
